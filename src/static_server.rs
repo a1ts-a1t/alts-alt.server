@@ -7,6 +7,25 @@ use hyper::service::Service;
 use std::path::{Path, PathBuf};
 use tokio::fs::File;
 
+fn path_to_mime_type(path: &PathBuf) -> Option<String> {
+    let extension = path.extension()
+        .map(|os_str| os_str.to_str())
+        .unwrap_or(None)
+        .unwrap_or("");
+
+    match extension {
+        "html" => Some("text/html".to_string()),
+        "css" => Some("text/css".to_string()),
+        "js" => Some("text/javascript".to_string()),
+        "ico" => Some("image/vnd.microsoft.icon".to_string()),
+        "jpeg" => Some("image/jpeg".to_string()),
+        "jpg" => Some("image/jpeg".to_string()),
+        "png" => Some("image/png".to_string()),
+        "svg" => Some("image/svg+xml".to_string()),
+        _ => None,
+    }
+}
+
 #[derive(Clone)]
 pub(crate) struct StaticServer {
 	root: Option<PathBuf>,
@@ -103,6 +122,7 @@ impl Service<RouterRequest> for StaticServer {
         let uri_path = req.uri().path().trim_start_matches("/");
         let not_found_response = self.get_not_found_response(uri_path.to_string());
         let file_path = root_path.join(Path::new(uri_path));
+        let mime_type = path_to_mime_type(&file_path);
         let file_future = Path::canonicalize(&file_path).iter()
             .map(|path| path.clone())
             .filter(|path| path.starts_with(&root_path))
@@ -121,11 +141,20 @@ impl Service<RouterRequest> for StaticServer {
                     not_found_response
                 },
                 Ok(file) => {
-                    Box::pin(async { Ok(Response::builder()
-                        .status(StatusCode::OK)
-                        .body(create_response_body_from_file(file))
-                        .unwrap()
-                    ) })
+                    Box::pin(async { 
+                        let res = match mime_type {
+                            Some(response_mime_type) => Response::builder()
+                                .header("Content-Type", response_mime_type)
+                                .status(StatusCode::OK)
+                                .body(create_response_body_from_file(file))
+                                .unwrap(),
+                            None => Response::builder()
+                                .status(StatusCode::OK)
+                                .body(create_response_body_from_file(file))
+                                .unwrap(),
+                        };
+                        Ok(res)
+                    })
                 },
             }
         });
