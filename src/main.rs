@@ -53,9 +53,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 	router.with_route_fn(vec!("api".to_string(), "ping".to_string()), ping_endpoint);
     router.with_service(vec!(), static_server);
 
-    let address = SocketAddr::from(([127, 0, 0, 1], port));
+    let address = SocketAddr::from(([0, 0, 0, 0], port));
     let listener = TcpListener::bind(address).await?;
 
+    println!("Server listening on http://0.0.0.0:{}", port);
 
     // listen for requests
     loop {
