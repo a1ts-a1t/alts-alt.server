@@ -21,8 +21,8 @@ jobs:
       - name: Publish executable artifact
         uses: actions/upload-artifact@v4
         with:
-          name: server
-          path: target/release/alts-alt_server
+          name: build
+          path: target/release/server
           if-no-files-found: error
           overwrite: true
         
@@ -43,9 +43,9 @@ jobs:
           ssh-keyscan -H ${{ secrets.HOST_NAME }} > ~/.ssh/known_hosts
 
       - name: Sync server executable
-        run: rsync -av --delete server/alts-alt_server ${{ secrets.HOST_USERNAME }}@${{ secrets.HOST_NAME }}:~/alts-alt.server
+        run: rsync -av --delete --chmod=744 -p build/server ${{ secrets.HOST_USERNAME }}@${{ secrets.HOST_NAME }}:~/alts-alt
 
       - name: Rebuild and restart server
         run: |
-          ssh ${{ secrets.HOST_USERNAME}}@${{ secrets.HOST_NAME }} < scripts/deploy.sh
+          ssh ${{ secrets.HOST_USERNAME}}@${{ secrets.HOST_NAME }} "~/alts-alt/entrypoint.sh"
 
