@@ -1,77 +1,44 @@
-use crate::types::{RouteFn, RouterError, RouterFuture, RouterRequest, RouterResponse};
+use futures_util::future::{ok, ready, Ready};
 use futures_util::FutureExt;
-use hyper::http::Response;
-use http_body_util::combinators::BoxBody;
-use hyper::{body::Bytes, service::Service};
-use std::sync::Arc;
-use tokio::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 
 #[derive(Clone)]
-struct CacheService {
-    max_age: Duration,
-	service_fn: Box<dyn RouteFn + Send + Sync + 'static>,
-
-	cached_data: Arc<Mutex<Option<Response<BoxBody<Bytes, hyper::Error>>>>>,
-	refresh_time: Arc<Mutex<Option<SystemTime>>>,
+pub(crate) struct CacheConfig {
+    pub max_age: Duration,
 }
 
-impl CacheService {
-    pub fn from_route_fn<F>(func: F, max_age: Duration) -> CacheService
-    where
-        F: Fn(RouterRequest) -> RouterFuture + Clone + Send + Sync + 'static,
-    {
-		CacheService {
-			max_age,
-			service_fn: Box::new(move |req| func(req)),
-			cached_data: Arc::new(Mutex::new(None)),
-			refresh_time: Arc::new(Mutex::new(None)),
-		}
-    }
-}
+pub(crate) fn create_cached_fn<F, C>(func: F, config: CacheConfig) -> impl Fn() -> C + Send + Sync + 'static
+where
+    F: Fn() -> C + Send + Sync + 'static,
+    C: Clone + Send + Sync + 'static,
+{
+    let refresh_time_mutex = Arc::new(Mutex::new(SystemTime::now()));
+    let cached_data_mutex: Arc<Mutex<Option<C>>> = Arc::new(Mutex::new(None));
 
-impl Service<RouterRequest> for CacheService {
-    type Response = RouterResponse;
-    type Error = RouterError;
-    type Future = RouterFuture;
+    move || {
+        let refresh_time = Arc::clone(&refresh_time_mutex);
+        let mut refresh_time = refresh_time.lock().unwrap();
 
-    fn call(&self, req: RouterRequest) -> Self::Future {
-        let func = async || {
-            let service_fn = self.service_fn.clone();
-            let max_age = self.max_age.clone();
+        let cached_data = Arc::clone(&cached_data_mutex);
+        let mut cached_data = cached_data.lock().unwrap();
 
-            let mut cached_data_mutex = self.cached_data.lock().await;
-            let mut refresh_time_mutex = self.refresh_time.lock().await;
+        let is_cache_fresh = SystemTime::now()
+            .duration_since(*refresh_time)
+            .map(|duration_since| duration_since.le(&config.max_age))
+            .unwrap_or(false);
 
-            let is_cache_fresh = (*refresh_time_mutex)
-                .map(|refresh_time| SystemTime::now().duration_since(refresh_time))
-                .iter()
-                .flat_map(|result| match result {
-                    Ok(duration) => Some(duration),
-                    Err(_) => None,
-                })
-                .map(|duration| duration.le(&max_age))
-                .next()
-                .unwrap_or(false);
+        let fresh_data = (*cached_data).as_ref().filter(|_| is_cache_fresh);
 
-            let fresh_data = (*cached_data_mutex).filter(|_| is_cache_fresh);
-
-            if let Some(response) = fresh_data {
-                return Ok(response);
-            }
-
-            let res = (*service_fn)(req).await;
-            match res {
-                Ok(response) => {
-                    *cached_data_mutex = Some(response);
-                    *refresh_time_mutex = Some(SystemTime::now());
-                    return Ok(response);
-                },
-                Err(e) => Err(e),
-            }
-        };
-
-        Box::pin(async { func().await })
+        match fresh_data {
+            Some(data) => data.clone(),
+            None => {
+                let new_data = func();
+                *refresh_time = SystemTime::now();
+                *cached_data = Some(new_data.clone());
+                new_data
+            },
+        }
     }
 }
 
