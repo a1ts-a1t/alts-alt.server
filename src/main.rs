@@ -2,6 +2,7 @@ mod types;
 mod router;
 mod static_server;
 mod utils;
+mod cache;
 
 use http::{Response, StatusCode};
 use hyper::server::conn::http1;
