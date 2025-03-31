@@ -1,5 +1,3 @@
-use futures_util::future::{ok, ready, Ready};
-use futures_util::FutureExt;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 

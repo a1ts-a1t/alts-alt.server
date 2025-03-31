@@ -3,7 +3,9 @@ mod router;
 mod static_server;
 mod utils;
 mod cache;
+mod api;
 
+use api::get_api_router;
 use http::{Response, StatusCode};
 use hyper::server::conn::http1;
 use hyper_util::rt::TokioIo;
@@ -51,7 +53,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     static_server.with_fallback_file(static_server_fallback_file);
 
 	let mut router = Router::new();
-	router.with_route_fn(vec!("api".to_string(), "ping".to_string()), ping_endpoint);
+    router.with_service(vec!("api".to_string()), get_api_router());
     router.with_service(vec!(), static_server);
 
     let address = SocketAddr::from(([0, 0, 0, 0], port));
