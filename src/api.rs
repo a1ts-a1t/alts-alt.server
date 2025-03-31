@@ -14,7 +14,7 @@ fn is_live_route_fn(_: RouterRequest) -> RouterFuture {
     let client = reqwest::Client::new();
     let res_fut = client.post("https://gql.twitch.tv/gql")
         .header("Client-Id", "kimne78kx3ncx6brgo4mv6wki5h1ko")
-        .body(r#"{"query":"query { user(login:\"alts_alt\") { stream { id } } }"}"#)
+        .body(r#"{"query":"query { user(login:\"alts_alt_\") { stream { id } } }"}"#)
         .send();
 
     let is_live_fut = res_fut.then(|response_result| async move {
@@ -26,10 +26,11 @@ fn is_live_route_fn(_: RouterRequest) -> RouterFuture {
         let is_live = text
             .and_then(|text| serde_json::from_str::<Value>(&text).ok())
             .and_then(|json| {
-                json.pointer("/data/user/stream")
-                    .and_then(|value| value.as_bool())
+                json.pointer("/data/user/stream/id")
+                    .and_then(|value| value.as_str())
+                    .map(|str| str.to_string())
             })
-            .unwrap_or(false);
+            .is_some();
 
         is_live
     });
