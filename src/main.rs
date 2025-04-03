@@ -2,29 +2,20 @@ mod types;
 mod router;
 mod static_server;
 mod utils;
+mod cache;
+mod api;
 
-use http::{Response, StatusCode};
+use api::get_api_router;
 use hyper::server::conn::http1;
 use hyper_util::rt::TokioIo;
 use router::Router;
 use static_server::StaticServer;
-use types::{RouterFuture, RouterRequest};
-use utils::create_response_body_from_string;
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
 
 const PORT_ENV_VAR: &str = "PORT";
 const ROOT_ENV_VAR: &str = "STATIC_SERVER_ROOT";
 const FALLBACK_FILE_ENV_VAR: &str = "STATIC_SERVER_FALLBACK_FILE";
-
-fn ping_endpoint(_: RouterRequest) -> RouterFuture {
-	let body = create_response_body_from_string("pong".to_string());
-	let res = Response::builder()
-		.status(StatusCode::OK)
-		.body(body)
-		.unwrap();
-	return Box::pin(async { Ok(res) });
-}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -50,7 +41,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     static_server.with_fallback_file(static_server_fallback_file);
 
 	let mut router = Router::new();
-	router.with_route_fn(vec!("api".to_string(), "ping".to_string()), ping_endpoint);
+    router.with_service(vec!("api".to_string()), get_api_router());
     router.with_service(vec!(), static_server);
 
     let address = SocketAddr::from(([0, 0, 0, 0], port));
