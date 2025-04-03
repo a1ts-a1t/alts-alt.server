@@ -12,8 +12,9 @@ fn ping_route_fn(_: RouterRequest) -> RouterFuture {
     Box::pin(async { Ok(res) })
 }
 
-fn create_is_live_route_fn() -> Box<impl Fn(RouterRequest) -> RouterFuture + Send + Sync + 'static> {
+fn create_is_live_route_fn() -> impl Fn(RouterRequest) -> RouterFuture + Clone + Send + Sync + 'static {
     let fetch_is_live = async || {
+        println!("Fetching!!!");
         let client = reqwest::Client::new();
         let response_result = client.post("https://gql.twitch.tv/gql")
             .header("Client-Id", "kimne78kx3ncx6brgo4mv6wki5h1ko")
@@ -40,16 +41,14 @@ fn create_is_live_route_fn() -> Box<impl Fn(RouterRequest) -> RouterFuture + Sen
     };
     let cached_fetch_is_live = create_cached_async_fn(fetch_is_live, config);
 
-    let func = move |_| {
+    move |_| {
         let fut = cached_fetch_is_live().then(async move |is_live| {
             let mut response = Response::new(create_response_body_from_string(is_live.to_string()));
             *response.status_mut() = StatusCode::OK;
             response
         });
         Box::pin(async { Ok(fut.await) })
-    };
-
-    Box::new(func)
+    }
 }
 
 pub(crate) fn get_api_router() -> Router {
