@@ -1,0 +1,16 @@
+[package]
+name = "server"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+server_utils = { path = "../server_utils" }
+hyper = { workspace = true, features = ["full"] }
+tokio = { workspace = true, features = ["full"] }
+hyper-util = { version = "0.1", features = ["full"] }
+futures-util = { workspace = true }
+http = { workspace = true }
+reqwest = "0.12.15"
+serde = "1.0.219"
+serde_json = "1.0.140"
+
