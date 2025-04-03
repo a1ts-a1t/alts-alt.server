@@ -8,6 +8,7 @@ pub(crate) struct CacheConfig {
     pub max_age: Duration,
 }
 
+#[allow(dead_code)]
 pub(crate) fn create_cached_fn<F, C>(func: F, config: CacheConfig) -> impl Fn() -> C + Send + Sync + 'static
 where
     F: Fn() -> C + Clone + Send + Sync + 'static,
@@ -42,7 +43,8 @@ where
     }
 }
 
-pub(crate) fn create_cached_async_fn<F, Fut, C>(func: F, config: CacheConfig) -> impl AsyncFn<Future = Pin<Box<impl Future<Output = C>>>, Out = C> + Clone + Send + Sync + 'static
+pub(crate) fn create_cached_async_fn<F, Fut, C>(func: F, config: CacheConfig)
+    -> impl AsyncFn<Future = Pin<Box<impl Future<Output = C>>>, Out = C> + Clone + Send + Sync + 'static
 where
     F: Fn() -> Fut + Clone + Send + Sync + 'static,
     Fut: Future<Output = C> + Send + Sync + 'static,

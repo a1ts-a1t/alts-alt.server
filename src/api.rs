@@ -1,10 +1,12 @@
-use std::time::Duration;
-
-use serde_json::Value;
+use crate::utils::create_response_body_from_string;
+use crate::types::{RouterFuture, RouterRequest};
+use crate::router::Router;
+use crate::cache::{create_cached_async_fn, CacheConfig};
 use futures_util::FutureExt;
 use http::{Response, StatusCode};
+use serde_json::Value;
+use std::time::Duration;
 
-use crate::{cache::{create_cached_async_fn, create_cached_fn, CacheConfig}, router::Router, types::{RouterFuture, RouterRequest}, utils::create_response_body_from_string};
 
 fn ping_route_fn(_: RouterRequest) -> RouterFuture {
     let body = create_response_body_from_string("pong".to_string());
@@ -14,7 +16,6 @@ fn ping_route_fn(_: RouterRequest) -> RouterFuture {
 
 fn create_is_live_route_fn() -> impl Fn(RouterRequest) -> RouterFuture + Clone + Send + Sync + 'static {
     let fetch_is_live = async || {
-        println!("Fetching!!!");
         let client = reqwest::Client::new();
         let response_result = client.post("https://gql.twitch.tv/gql")
             .header("Client-Id", "kimne78kx3ncx6brgo4mv6wki5h1ko")
