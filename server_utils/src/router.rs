@@ -6,7 +6,7 @@ use hyper::service::Service;
 use hyper::{Response, StatusCode};
 use itertools::Itertools;
 
-fn route_vec_to_string(route: &Vec<String>) -> String {
+fn route_vec_to_string(route: &[String]) -> String {
     route.iter().map(|component| {
         let mut component_clone = component.clone();
         component_clone.insert(0, '/');
@@ -38,6 +38,12 @@ pub struct Router {
 	route_fn_map: HashMap<Vec<String>, Box<dyn RouteFn + Send + Sync + 'static>>,
 }
 
+impl Default for Router {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Router {
 	pub fn new() -> Router {
 		Router {
@@ -45,7 +51,7 @@ impl Router {
 		}
 	}
 
-    pub fn with_route_fn<F>(&mut self, route: Vec<String>, func: F) -> ()
+    pub fn with_route_fn<F>(&mut self, route: Vec<String>, func: F)
     where
         F: Fn(RouterRequest) -> RouterFuture + Clone + Send + Sync + 'static,
     {
@@ -64,7 +70,7 @@ impl Router {
         }));
     }
 
-    pub fn with_service<S>(&mut self, route: Vec<String>, service: S) -> ()
+    pub fn with_service<S>(&mut self, route: Vec<String>, service: S)
     where
         S: Service<
             RouterRequest, 
@@ -105,7 +111,7 @@ impl Service<RouterRequest> for Router {
 
 		let func = func.unwrap();
 		let fut = func(req);
-		Box::pin(async { fut.await })
+		Box::pin(fut)
     }
 }
 

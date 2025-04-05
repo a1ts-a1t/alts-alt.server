@@ -7,7 +7,7 @@ use hyper::service::Service;
 use std::path::{Path, PathBuf};
 use tokio::fs::File;
 
-fn path_to_mime_type(path: &PathBuf) -> Option<String> {
+fn path_to_mime_type(path: &Path) -> Option<String> {
     let extension = path.extension()
         .map(|os_str| os_str.to_str())
         .unwrap_or(None)
