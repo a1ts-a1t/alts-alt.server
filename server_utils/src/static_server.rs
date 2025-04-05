@@ -27,9 +27,15 @@ fn path_to_mime_type(path: &Path) -> Option<String> {
 }
 
 #[derive(Clone)]
-pub(crate) struct StaticServer {
+pub struct StaticServer {
 	root: Option<PathBuf>,
 	fallback_file: Option<PathBuf>,
+}
+
+impl Default for StaticServer {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl StaticServer {
@@ -40,7 +46,7 @@ impl StaticServer {
 		}
 	}
 
-	pub fn with_root(&mut self, root: String) -> () {
+	pub fn with_root(&mut self, root: String) {
 		let path = Path::new(&root);
 		if !path.is_dir() {
 			panic!("Unable to use `{}` as a static server root since it is not a directory", root);
@@ -56,7 +62,7 @@ impl StaticServer {
 		};
 	}
 
-	pub fn with_fallback_file(&mut self, fallback_file_path: String) -> () {
+	pub fn with_fallback_file(&mut self, fallback_file_path: String) {
 		let path = Path::new(&fallback_file_path);
 		if path.is_dir() {
 			panic!("Unable to use `{}` as a fallback file since it is not a directory", fallback_file_path);
@@ -104,7 +110,7 @@ impl StaticServer {
             }
         });
 
-        Box::pin(async { fut.await })
+        Box::pin(fut)
 	}
 }
 
@@ -124,14 +130,14 @@ impl Service<RouterRequest> for StaticServer {
         let file_path = root_path.join(Path::new(uri_path));
         let mime_type = path_to_mime_type(&file_path);
         let file_future = Path::canonicalize(&file_path).iter()
-            .map(|path| path.clone())
-            .filter(|path| path.starts_with(&root_path))
-            .filter(|path| !path.is_dir())
-            .map(|path| File::open(path))
+            .filter(|&path| path.starts_with(&root_path))
+            .filter(|&path| !path.is_dir())
+            .cloned()
+            .map(File::open)
             .next();
 
         if file_future.is_none() {
-            return Box::pin(async { not_found_response.await });
+            return Box::pin(not_found_response);
         }
         
         let fut = file_future.unwrap().then(|file_res| {
@@ -159,7 +165,7 @@ impl Service<RouterRequest> for StaticServer {
             }
         });
 
-        Box::pin(async { fut.await })
+        Box::pin(fut)
     }
 }
 

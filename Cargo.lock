@@ -1020,13 +1020,24 @@ version = "0.1.0"
 dependencies = [
  "futures-util",
  "http",
- "http-body-util",
  "hyper",
  "hyper-util",
- "itertools",
  "reqwest",
  "serde",
  "serde_json",
+ "server_utils",
+ "tokio",
+]
+
+[[package]]
+name = "server_utils"
+version = "0.1.0"
+dependencies = [
+ "futures-util",
+ "http",
+ "http-body-util",
+ "hyper",
+ "itertools",
  "tokio",
  "tokio-util",
 ]
