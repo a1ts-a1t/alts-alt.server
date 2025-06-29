@@ -1,0 +1,57 @@
+name: Deploy server executable
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: rust:1-slim-bookworm
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Build executable
+        run: cargo build -r
+
+      - name: Compress debug sections
+        run: objcopy --compress-debug-sections target/release/server ./server
+
+      - name: Publish artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: build
+          path: ./server
+          if-no-files-found: error
+          overwrite: true
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+
+      - name: Initialize ssh
+        run: |
+          install -m 600 -D /dev/null ~/.ssh/id_rsa
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.HOST_NAME }} > ~/.ssh/known_hosts
+
+      - name: Sync server executable
+        run: rsync -av --delete --chmod=700 -p build/server ${{ secrets.USERNAME }}@${{ secrets.HOST_NAME }}:~/alts-alt
+
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Sync server config
+        run: rsync -av --delete -p Rocket.toml ${{ secrets.USERNAME }}@${{ secrets.HOST_NAME }}:~/alts-alt
+
+      - name: Restart server
+        run: |
+          ssh ${{ secrets.USERNAME }}@${{ secrets.HOST_NAME }} "./alts-alt/entrypoint.sh"
+
