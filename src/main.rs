@@ -1,3 +1,6 @@
+mod cache;
+mod twitch;
+
 use std::path::Path;
 use rocket::{catch, catchers, get, launch, routes};
 use rocket::fs::{FileServer, NamedFile};
