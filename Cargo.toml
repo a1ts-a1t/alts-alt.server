@@ -4,4 +4,5 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-rocket = { version = "0.5.1", features = ["tls"] }
+reqwest = "0.12.21"
+rocket = { version = "0.5.1", features = ["json"] }
