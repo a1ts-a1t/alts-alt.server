@@ -1,7 +1,9 @@
 mod cache;
+mod cors;
 mod twitch;
 
 use cache::Cache;
+use cors::Cors;
 use rocket::fs::{FileServer, NamedFile};
 use rocket::{catch, catchers, get, launch, routes};
 use std::path::Path;
@@ -26,4 +28,5 @@ fn rocket() -> _ {
         .mount("/", FileServer::from("./static"))
         .register("/", catchers![not_found])
         .manage(Cache::<String, String>::default())
+        .attach(Cors)
 }
