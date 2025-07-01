@@ -56,10 +56,10 @@ pub async fn twitch_handler(
         Err(_) => {
             let res = fetch_twitch_api_response().await;
             res.inspect(|val| {
-                (cache.put(
+                cache.put(
                     CACHE_KEY.to_string(),
                     serde_json::to_string(val).expect("Unable to deserialize Twitch API response."),
-                ))
+                )
             })
             .map(Json)
             .map_err(|e| (http::Status::InternalServerError, e))
