@@ -1,15 +1,17 @@
 mod cache;
 mod twitch;
 
-use std::path::Path;
 use cache::Cache;
-use rocket::{catch, catchers, get, launch, routes};
 use rocket::fs::{FileServer, NamedFile};
+use rocket::{catch, catchers, get, launch, routes};
+use std::path::Path;
 use twitch::twitch_handler;
 
 #[catch(404)]
 async fn not_found() -> Option<NamedFile> {
-    NamedFile::open(Path::new("./static/not_found.html")).await.ok()
+    NamedFile::open(Path::new("./static/not_found.html"))
+        .await
+        .ok()
 }
 
 #[get("/ping")]
@@ -25,4 +27,3 @@ fn rocket() -> _ {
         .register("/", catchers![not_found])
         .manage(Cache::<String, String>::default())
 }
-
