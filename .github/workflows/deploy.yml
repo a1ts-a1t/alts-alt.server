@@ -36,3 +36,7 @@ jobs:
         run: |
           ssh ${{ secrets.USERNAME }}@${{ secrets.HOST_NAME }} "./alts-alt/entrypoint.sh"
 
+    verify:
+      needs: deploy
+      uses: ./.github/workflows/canary.yml
+
