@@ -1,11 +1,11 @@
 use crate::cache::Cache;
-use reqwest::{Response, Client};
-use rocket::http;
+use reqwest::{Client, Response};
 use rocket::futures::TryFutureExt;
-use rocket::{get, State};
-use rocket::serde::{Serialize, Deserialize};
-use rocket::serde::json::{self, Json};
+use rocket::http;
 use rocket::serde::json::serde_json::{self, Value};
+use rocket::serde::json::{self, Json};
+use rocket::serde::{Deserialize, Serialize};
+use rocket::{State, get};
 
 const CACHE_KEY: &str = "IS_LIVE_TWITCH_API_CACHE_KEY";
 
@@ -16,11 +16,17 @@ pub struct TwitchApiResponse {
 }
 
 async fn get_is_live_from_response(response: Response) -> Result<bool, String> {
-    response.text()
+    response
+        .text()
         .await
         .map_err(|e| e.to_string())
         .and_then(|body| serde_json::from_str::<Value>(body.as_str()).map_err(|e| e.to_string()))
-        .and_then(|json_body| json_body.pointer("/data/user/stream").cloned().ok_or("Unable to determine `is_live` status.".to_string()))
+        .and_then(|json_body| {
+            json_body
+                .pointer("/data/user/stream")
+                .cloned()
+                .ok_or("Unable to determine `is_live` status.".to_string())
+        })
         .map(|val| !val.is_null())
 }
 
@@ -37,8 +43,11 @@ async fn fetch_twitch_api_response() -> Result<TwitchApiResponse, String> {
 }
 
 #[get("/twitch")]
-pub async fn twitch_handler(cache: &State<Cache<String, String>>) -> Result<Json<TwitchApiResponse>, (http::Status, String)> {
-    let cache_value = cache.get(&CACHE_KEY.to_string())
+pub async fn twitch_handler(
+    cache: &State<Cache<String, String>>,
+) -> Result<Json<TwitchApiResponse>, (http::Status, String)> {
+    let cache_value = cache
+        .get(&CACHE_KEY.to_string())
         .ok_or(())
         .and_then(|val| json::from_str::<TwitchApiResponse>(&val).map_err(|_| ()));
 
@@ -46,10 +55,14 @@ pub async fn twitch_handler(cache: &State<Cache<String, String>>) -> Result<Json
         Ok(val) => Ok(Json(val)),
         Err(_) => {
             let res = fetch_twitch_api_response().await;
-            res.inspect(|val| (cache.put(CACHE_KEY.to_string(), serde_json::to_string(val).expect("Unable to deserialize Twitch API response."))))
-                .map(|val| Json(val))
-                .map_err(|e| (http::Status::InternalServerError, e))
-        },
+            res.inspect(|val| {
+                (cache.put(
+                    CACHE_KEY.to_string(),
+                    serde_json::to_string(val).expect("Unable to deserialize Twitch API response."),
+                ))
+            })
+            .map(Json)
+            .map_err(|e| (http::Status::InternalServerError, e))
+        }
     }
 }
-
