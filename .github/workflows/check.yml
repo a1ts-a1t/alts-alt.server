@@ -1,0 +1,40 @@
+name: Check code base validity
+
+on:
+  pull_request:
+    branches:
+      - main
+    types: [opened, edited, reopened]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    container:
+      image: rust:1-alpine3.22
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Run tests
+        run: cargo test
+
+  build:
+    uses: ./.github/workflows/build.yml
+
+  lint:
+    runs-on: ubuntu-latest
+    container:
+      image: rust:1-alpine3.22
+    env:
+      RUSTFLAGS: "-Dwarnings"
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Run linter
+        run: cargo clippy
+
+      - name: Run formatter
+        run: cargo fmt --all --check
+
