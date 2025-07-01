@@ -4,7 +4,7 @@ use rocket::fs::{FileServer, NamedFile};
 
 #[catch(404)]
 async fn not_found() -> Option<NamedFile> {
-    NamedFile::open(Path::new("./static/404.html")).await.ok()
+    NamedFile::open(Path::new("./static/not_found.html")).await.ok()
 }
 
 #[get("/ping")]
