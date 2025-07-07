@@ -33,7 +33,7 @@ async fn get_is_live_from_response(response: Response) -> Result<bool, String> {
 async fn fetch_twitch_api_response() -> Result<TwitchApiResponse, String> {
     Client::new()
         .post("https://gql.twitch.tv/gql")
-        .body("{\"query\":\"query {\\n  user(login:\\\"alts_alt\\\") {\\n stream {\\n id\\n}\\n}\\n}\"}")
+        .body("{\"query\":\"query {\\n  user(login:\\\"alts_alt_\\\") {\\n stream {\\n id\\n}\\n}\\n}\"}")
         .header("Client-Id", "kimne78kx3ncx6brgo4mv6wki5h1ko")
         .send()
         .map_err(|e| e.to_string())
