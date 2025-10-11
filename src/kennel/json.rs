@@ -20,4 +20,3 @@ impl From<&Creature> for CreatureJson {
         }
     }
 }
-

@@ -1,12 +1,12 @@
 use std::{path::PathBuf, sync::Arc};
 
+use rocket::{State as RocketState, fairing::AdHoc, get, http, serde::json::Json};
 pub use state::State;
-use rocket::{fairing::AdHoc, get, http, serde::json::Json, State as RocketState};
 
 use crate::kennel::json::CreatureJson;
 
-mod state;
 mod json;
+mod state;
 
 pub fn init_kennel() -> (Arc<State>, AdHoc) {
     let dir = PathBuf::from("./kennel-club");
@@ -14,12 +14,11 @@ pub fn init_kennel() -> (Arc<State>, AdHoc) {
     let kennel = Arc::new(kennel);
 
     let kennel_clone = kennel.clone();
-    let cleanup = AdHoc::on_shutdown(
-        "Kennel shutdown",
-        |_| Box::pin(async move {
+    let cleanup = AdHoc::on_shutdown("Kennel shutdown", |_| {
+        Box::pin(async move {
             kennel_clone.shutdown();
         })
-    );
+    });
 
     (kennel, cleanup)
 }
@@ -28,7 +27,8 @@ pub fn init_kennel() -> (Arc<State>, AdHoc) {
 pub async fn kennel_handler(
     kennel: &RocketState<Arc<State>>,
 ) -> Result<Json<Vec<CreatureJson>>, (http::Status, String)> {
-    kennel.as_json()
-        .map(|c| Json(c))
+    kennel
+        .as_json()
+        .map(Json)
         .map_err(|s| (http::Status::InternalServerError, s.to_string()))
 }

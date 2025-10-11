@@ -1,4 +1,9 @@
-use std::{path::PathBuf, sync::{Arc, Mutex}, thread, time::Duration};
+use std::{
+    path::PathBuf,
+    sync::{Arc, Mutex},
+    thread,
+    time::Duration,
+};
 
 use kennel_club::Kennel;
 
@@ -27,13 +32,14 @@ impl State {
                     .lock()
                     .expect("Error reading kennel shutdown state");
                 if *is_shutdown {
-                    break
+                    break;
                 }
                 drop(is_shutdown);
 
                 thread::sleep(Duration::from_secs(1));
                 let mut kennel = thread_kennel.lock().expect("Error reading kennel state");
-                *kennel = kennel.next(&mut kennel_rng)
+                *kennel = kennel
+                    .next(&mut kennel_rng)
                     .expect("Error generating next kennel state");
                 drop(kennel);
             }
@@ -46,20 +52,17 @@ impl State {
     }
 
     pub fn as_json(&self) -> Result<Vec<CreatureJson>, serde_json::Error> {
-        let kennel = self.kennel.lock()
-            .expect("Error reading kennel state");
+        let kennel = self.kennel.lock().expect("Error reading kennel state");
 
-        Ok(kennel.creatures()
+        Ok(kennel
+            .creatures()
             .into_iter()
             .map(CreatureJson::from)
             .collect())
     }
 
     pub fn shutdown(&self) {
-        let mut is_shutdown = self
-            .is_shutdown
-            .lock()
-            .expect("Error shutting down kennel");
+        let mut is_shutdown = self.is_shutdown.lock().expect("Error shutting down kennel");
 
         *is_shutdown = true;
     }

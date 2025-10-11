@@ -1,7 +1,7 @@
 mod cache;
 mod cors;
-mod twitch;
 mod kennel;
+mod twitch;
 
 use cache::Cache;
 use cors::Cors;
@@ -28,7 +28,10 @@ fn ping_handler() -> &'static str {
 fn rocket() -> _ {
     let (kennel, kennel_cleanup) = init_kennel();
     rocket::build()
-        .mount("/api", routes![ping_handler, twitch_handler, kennel_handler])
+        .mount(
+            "/api",
+            routes![ping_handler, twitch_handler, kennel_handler],
+        )
         .mount("/", FileServer::from("./static"))
         .register("/", catchers![not_found])
         .manage(Cache::<String, String>::default())
