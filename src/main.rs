@@ -1,5 +1,6 @@
 mod cache;
 mod cors;
+mod kennel;
 mod twitch;
 
 use cache::Cache;
@@ -8,6 +9,8 @@ use rocket::fs::{FileServer, NamedFile};
 use rocket::{catch, catchers, get, launch, routes};
 use std::path::Path;
 use twitch::twitch_handler;
+
+use crate::kennel::{init_kennel, kennel_handler};
 
 #[catch(404)]
 async fn not_found() -> Option<NamedFile> {
@@ -23,10 +26,16 @@ fn ping_handler() -> &'static str {
 
 #[launch]
 fn rocket() -> _ {
+    let (kennel, kennel_cleanup) = init_kennel();
     rocket::build()
-        .mount("/api", routes![ping_handler, twitch_handler])
+        .mount(
+            "/api",
+            routes![ping_handler, twitch_handler, kennel_handler],
+        )
         .mount("/", FileServer::from("./static"))
         .register("/", catchers![not_found])
         .manage(Cache::<String, String>::default())
+        .manage(kennel)
+        .attach(kennel_cleanup)
         .attach(Cors)
 }

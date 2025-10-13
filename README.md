@@ -9,7 +9,7 @@ use the `dev.Dockerfile` to run a local instance of the server. it depends on [t
 assuming you have docker on your system, run the following
 
 ```sh
-sudo docker image -f dev.Dockerfile -t alts-alt.dev .
+sudo docker build -f dev.Dockerfile -t alts-alt.dev .
 sudo docker run -p 8000:8000 -d alts-alt.dev
 ```
 

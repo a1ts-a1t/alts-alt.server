@@ -8,11 +8,17 @@ RUN objcopy --compress-debug-sections target/release/server ./server
 
 FROM docker.io/alpine:3.22.0
 
+# server
 COPY --from=build /server ./server
+COPY ./Rocket.toml ./Rocket.toml
+
+# static resources
 ADD https://alts-alt.online ./static/not_found.html
 ADD https://alts-alt.online/main.js ./static/main.js
 ADD https://alts-alt.online/favicon.ico ./static/favicon.ico
-COPY ./Rocket.toml ./Rocket.toml
+
+# kennel club
+ADD https://github.com/a1ts-a1t/kennel-club.git#:data ./kennel-club
 
 EXPOSE 8000
 CMD ["./server"]
