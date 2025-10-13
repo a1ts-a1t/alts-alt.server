@@ -1138,6 +1138,7 @@ dependencies = [
 [[package]]
 name = "kennel-club"
 version = "0.1.0"
+source = "git+https://github.com/a1ts-a1t/kennel-club.git#2b8a87b589aa4bc84d36f19689e48be6e632f53b"
 dependencies = [
  "image",
  "itertools 0.14.0",

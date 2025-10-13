@@ -1,5 +1,5 @@
 use std::{
-    path::PathBuf,
+    path::Path,
     sync::{Arc, Mutex},
     thread,
     time::Duration,
@@ -15,7 +15,7 @@ pub struct State {
 }
 
 impl State {
-    pub fn load(dir: &PathBuf) -> Result<Self, String> {
+    pub fn load(dir: &Path) -> Result<Self, String> {
         let mut init_rng = rand::rng();
         let kennel = Kennel::load(dir, &mut init_rng)?;
 
