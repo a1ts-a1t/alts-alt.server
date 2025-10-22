@@ -5,9 +5,12 @@ use std::{
     time::Duration,
 };
 
-use kennel_club::Kennel;
+use kennel_club::{Kennel, ImageFormat};
 
 use crate::kennel::json::CreatureJson;
+
+static IMAGE_WIDTH: u32 = 1024;
+static IMAGE_HEIGHT: u32 = 1024;
 
 pub struct State {
     kennel: Arc<Mutex<Kennel>>,
@@ -49,6 +52,11 @@ impl State {
             kennel: kennel_rc,
             is_shutdown: is_shutdown_rc,
         })
+    }
+
+    pub fn as_image(&self, format: ImageFormat) -> Result<Vec<u8>, String> {
+        let kennel = self.kennel.lock().expect("Error reading kennel state");
+        kennel.get_image(IMAGE_WIDTH, IMAGE_HEIGHT, format)
     }
 
     pub fn as_json(&self) -> Result<Vec<CreatureJson>, serde_json::Error> {
