@@ -38,7 +38,7 @@ pub async fn kennel_handler(accept: &Accept, kennel: &RocketState<Arc<State>>) -
             .extension()
             .map(UncasedStr::as_str)
             .and_then(ImageFormat::from_extension)
-          .unwrap_or(ImageFormat::Png);
+            .unwrap_or(ImageFormat::Png);
 
         return match kennel.as_image(image_format) {
             Ok(data) => Response::new_image(data, image_format),
