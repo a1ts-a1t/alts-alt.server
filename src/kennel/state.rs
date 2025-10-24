@@ -1,8 +1,12 @@
 use std::{
-    collections::HashMap, path::Path, sync::{Arc, Mutex}, thread, time::Duration
+    collections::HashMap,
+    path::Path,
+    sync::{Arc, Mutex},
+    thread,
+    time::Duration,
 };
 
-use kennel_club::{Kennel, ImageFormat};
+use kennel_club::{ImageFormat, Kennel, Sprite};
 
 use crate::kennel::json::CreatureJson;
 
@@ -51,7 +55,9 @@ impl State {
                 drop(kennel);
 
                 // clear image cache
-                let mut image_cache = thread_image_cache.lock().expect("Error reading kennel image cache");
+                let mut image_cache = thread_image_cache
+                    .lock()
+                    .expect("Error reading kennel image cache");
                 image_cache.clear();
                 drop(image_cache);
             }
@@ -72,19 +78,35 @@ impl State {
             kennel.get_image(IMAGE_WIDTH, IMAGE_HEIGHT, format)
         });
 
-        cache_result.as_ref()
+        cache_result
+            .as_ref()
             .map(|data| data.to_vec())
             .map_err(|message| message.clone())
     }
 
-    pub fn as_json(&self) -> Result<Vec<CreatureJson>, serde_json::Error> {
+    pub fn as_json(&self) -> Vec<CreatureJson> {
         let kennel = self.kennel.lock().expect("Error reading kennel state");
 
-        Ok(kennel
+        kennel
             .creatures()
             .into_iter()
             .map(CreatureJson::from)
-            .collect())
+            .collect()
+    }
+
+    pub fn get_creature(&self, id: &str) -> Option<CreatureJson> {
+        let kennel = self.kennel.lock().expect("Error reading kennel state");
+
+        kennel
+            .creatures()
+            .into_iter()
+            .find(|creature| creature.id == id)
+            .map(CreatureJson::from)
+    }
+
+    pub fn get_sprite(&self, id: &str) -> Option<Sprite> {
+        let kennel = self.kennel.lock().expect("Error reading kennel state");
+        kennel.get_sprite(id).cloned()
     }
 
     pub fn shutdown(&self) {
