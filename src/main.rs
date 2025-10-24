@@ -10,7 +10,7 @@ use rocket::{catch, catchers, get, launch, routes};
 use std::path::Path;
 use twitch::twitch_handler;
 
-use crate::kennel::{init_kennel, kennel_handler};
+use crate::kennel::{creature_handler, init_kennel, kennel_handler};
 
 #[catch(404)]
 async fn not_found() -> Option<NamedFile> {
@@ -30,7 +30,12 @@ fn rocket() -> _ {
     rocket::build()
         .mount(
             "/api",
-            routes![ping_handler, twitch_handler, kennel_handler],
+            routes![
+                ping_handler,
+                twitch_handler,
+                kennel_handler,
+                creature_handler
+            ],
         )
         .mount("/", FileServer::from("./static"))
         .register("/", catchers![not_found])

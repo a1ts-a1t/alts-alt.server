@@ -1,11 +1,18 @@
 use std::{path::PathBuf, sync::Arc};
 
-use rocket::{State as RocketState, fairing::AdHoc, get, http, serde::json::Json};
+use kennel_club::ImageFormat;
+use rocket::{
+    State as RocketState,
+    fairing::AdHoc,
+    get,
+    http::{self, Accept, uncased::UncasedStr},
+};
 pub use state::State;
 
-use crate::kennel::json::CreatureJson;
+use crate::kennel::response::Response;
 
 mod json;
+mod response;
 mod state;
 
 pub fn init_kennel() -> (Arc<State>, AdHoc) {
@@ -24,11 +31,53 @@ pub fn init_kennel() -> (Arc<State>, AdHoc) {
 }
 
 #[get("/kennel-club")]
-pub async fn kennel_handler(
+pub async fn kennel_handler(accept: &Accept, kennel: &RocketState<Arc<State>>) -> Response {
+    let media_type = accept.preferred().media_type();
+    if media_type.top() == "image" {
+        let image_format = media_type
+            .extension()
+            .map(UncasedStr::as_str)
+            .and_then(ImageFormat::from_extension)
+            .unwrap_or(ImageFormat::Png);
+
+        return match kennel.as_image(image_format) {
+            Ok(data) => Response::new_image(data, image_format),
+            Err(message) => Response::new_err(http::Status::InternalServerError, &message),
+        };
+    }
+
+    // default to returning json
+    Response::new_json(kennel.as_json())
+}
+
+#[get("/kennel-club/<creature_id>")]
+pub async fn creature_handler(
+    accept: &Accept,
+    creature_id: &str,
     kennel: &RocketState<Arc<State>>,
-) -> Result<Json<Vec<CreatureJson>>, (http::Status, String)> {
-    kennel
-        .as_json()
-        .map(Json)
-        .map_err(|s| (http::Status::InternalServerError, s.to_string()))
+) -> Response {
+    let media_type = accept.preferred().media_type();
+    if media_type.top() == "image" {
+        let (bytes, format) = kennel
+            .get_sprite(creature_id)
+            .map(|sprite| (sprite.bytes(), sprite.format()))
+            .unzip();
+
+        return match (bytes, format) {
+            (Some(b), Some(f)) => Response::new_image(b, f),
+            _ => Response::new_err(
+                http::Status::NotFound,
+                &format!("{} not found", creature_id),
+            ),
+        };
+    }
+
+    // default to json
+    match kennel.get_creature(creature_id) {
+        Some(creature) => Response::new_json(creature),
+        None => Response::new_err(
+            http::Status::NotFound,
+            &format!("{} not found", creature_id),
+        ),
+    }
 }
