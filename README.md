@@ -9,8 +9,6 @@ use the `dev.Dockerfile` to run a local instance of the server. it depends on [t
 assuming you have docker on your system, run the following
 
 ```sh
-sudo docker image rm alts-alt.dev # cleanup
-sudo docker build -f dev.Dockerfile -t alts-alt.dev .
-sudo docker run -p 8000:8000 -d alts-alt.dev
+sudo docker compose -f compose.dev.yml -d up
 ```
 
