@@ -5,7 +5,7 @@ use rocket::{
     State as RocketState,
     fairing::AdHoc,
     get,
-    http::{self, Accept, uncased::UncasedStr},
+    http::{self},
 };
 pub use state::State;
 
@@ -36,16 +36,9 @@ pub async fn kennel_handler(kennel: &RocketState<Arc<State>>) -> Response {
 }
 
 #[get("/img")]
-pub async fn kennel_img_handler(accept: &Accept, kennel: &RocketState<Arc<State>>) -> Response {
-    let media_type = accept.preferred().media_type();
-    let image_format = media_type
-        .extension()
-        .map(UncasedStr::as_str)
-        .and_then(ImageFormat::from_extension)
-        .unwrap_or(ImageFormat::Png);
-
-    match kennel.as_image(image_format) {
-        Ok(data) => Response::new_image(data, image_format),
+pub async fn kennel_img_handler(kennel: &RocketState<Arc<State>>) -> Response {
+    match kennel.as_image(ImageFormat::Png) {
+        Ok(data) => Response::new_image(data, ImageFormat::Png),
         Err(message) => Response::new_err(http::Status::InternalServerError, &message),
     }
 }
