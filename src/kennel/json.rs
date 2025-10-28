@@ -11,7 +11,7 @@ pub struct CreatureJson {
 
 impl From<&Creature> for CreatureJson {
     fn from(creature: &Creature) -> Self {
-        let sprite_path = format!("/api/kennel-club/{}", creature.id);
+        let sprite_path = format!("/api/kennel-club/{}/img", creature.id);
         CreatureJson {
             id: creature.id.clone(),
             radius: creature.radius,
