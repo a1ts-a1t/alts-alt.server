@@ -14,6 +14,10 @@ pub enum Response {
     Err {
         inner: (http::Status, String),
     },
+    #[response(status = 301)]
+    PermanentRedirect((), Header<'static>),
+    #[response(status = 302)]
+    TemporaryRedirect((), Header<'static>),
 }
 
 impl Response {
@@ -38,5 +42,15 @@ impl Response {
         Self::Err {
             inner: (status, message.to_string()),
         }
+    }
+
+    pub fn new_permanent_redirect(location: String) -> Self {
+        let location = Header::new("Location", location);
+        Self::PermanentRedirect((), location)
+    }
+
+    pub fn new_temporary_redirect(location: String) -> Self {
+        let location = Header::new("Location", location);
+        Self::TemporaryRedirect((), location)
     }
 }
