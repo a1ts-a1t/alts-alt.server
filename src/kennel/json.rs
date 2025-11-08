@@ -1,7 +1,7 @@
-use kennel_club::{creature::Creature, math::Vec2};
+use kennel_club::{Kennel, creature::Creature, math::Vec2};
 use serde::Serialize;
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub struct CreatureJson {
     id: String,
     url: String,
@@ -28,5 +28,23 @@ impl From<&Creature> for CreatureJson {
 impl CreatureJson {
     pub fn url(&self) -> String {
         self.url.clone()
+    }
+}
+
+#[derive(Serialize, Clone)]
+#[serde(transparent)]
+pub struct KennelJson {
+    creatures: Vec<CreatureJson>,
+}
+
+impl From<&Kennel> for KennelJson {
+    fn from(kennel: &Kennel) -> Self {
+        Self {
+            creatures: kennel
+                .creatures()
+                .into_iter()
+                .map(CreatureJson::from)
+                .collect(),
+        }
     }
 }

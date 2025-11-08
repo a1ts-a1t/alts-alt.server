@@ -10,3 +10,7 @@ kennel-club = { git = "https://github.com/a1ts-a1t/kennel-club.git" }
 serde_json = "1.0.145"
 rand = { version = "0.9.2", features = ["std_rng"] }
 serde = { version = "1.0.219", features = ["derive"] }
+uuid = { version = "1.18.1", features = ["v4"] }
+ws = { package = "rocket_ws", version = "0.1.1" }
+tokio-stream = "0.1.17"
+pin-project-lite = "0.2"

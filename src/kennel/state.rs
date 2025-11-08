@@ -1,65 +1,83 @@
-use std::{
-    path::Path,
-    sync::{Arc, Mutex},
-    thread,
-    time::Duration,
-};
+use std::{collections::HashMap, path::Path, sync::Arc, time::Duration};
 
 use kennel_club::{ImageFormat, Kennel, Sprite};
 use rand::{SeedableRng, rngs::StdRng, seq::IteratorRandom};
+use rocket::{
+    futures::lock::Mutex,
+    tokio::{
+        self,
+        sync::mpsc::{self, Receiver, Sender},
+        time::sleep,
+    },
+};
+use uuid::Uuid;
 
-use crate::kennel::json::CreatureJson;
+use crate::kennel::json::{CreatureJson, KennelJson};
 
 static IMAGE_WIDTH: u32 = 2048;
 static IMAGE_HEIGHT: u32 = 2048;
 
 type ImageResult = Option<Result<Vec<u8>, String>>;
 
+fn safe_rng() -> StdRng {
+    let mut rng = rand::rng();
+    StdRng::from_rng(&mut rng)
+}
+
 pub struct State {
     kennel: Arc<Mutex<Kennel>>,
     is_shutdown: Arc<Mutex<bool>>,
     image_cache: Arc<Mutex<ImageResult>>,
-    rng: Arc<Mutex<StdRng>>,
+    subscribers: Arc<Mutex<HashMap<Uuid, Sender<KennelJson>>>>,
 }
 
 impl State {
     pub fn load(dir: &Path) -> Result<Self, String> {
-        let mut init_rng = StdRng::from_os_rng();
+        let mut init_rng = safe_rng();
         let kennel = Kennel::load(dir, &mut init_rng)?;
+        let subscribers: HashMap<Uuid, Sender<KennelJson>> = HashMap::new();
 
         let kennel_rc = Arc::new(Mutex::new(kennel));
         let is_shutdown_rc = Arc::new(Mutex::new(false));
         let image_cache_rc = Arc::new(Mutex::new(None));
+        let subscribers_rc = Arc::new(Mutex::new(subscribers));
 
         let thread_kennel = kennel_rc.clone();
         let thread_is_shutdown = is_shutdown_rc.clone();
         let thread_image_cache = image_cache_rc.clone();
+        let thread_subscribers = subscribers_rc.clone();
 
-        thread::spawn(move || {
-            let mut kennel_rng = rand::rng();
+        tokio::spawn(async move {
+            let mut kennel_rng = safe_rng();
             loop {
                 // graceful shutdown
-                let is_shutdown = thread_is_shutdown
-                    .lock()
-                    .expect("Error reading kennel shutdown state");
+                let is_shutdown = thread_is_shutdown.lock().await;
                 if *is_shutdown {
                     break;
                 }
                 drop(is_shutdown);
 
-                thread::sleep(Duration::from_secs(1));
+                sleep(Duration::from_secs(1)).await;
 
                 // update kennel state
-                let mut kennel = thread_kennel.lock().expect("Error reading kennel state");
-                *kennel = kennel
+                let mut kennel = thread_kennel.lock().await;
+                let next_kennel = kennel
                     .next(&mut kennel_rng)
                     .expect("Error generating next kennel state");
+
+                let subscribers = thread_subscribers.lock().await;
+
+                let kennel_json = KennelJson::from(&next_kennel);
+                for subscriber in subscribers.values() {
+                    let _ = subscriber.send(kennel_json.clone()).await;
+                }
+                drop(subscribers);
+
+                *kennel = next_kennel;
                 drop(kennel);
 
                 // clear image cache
-                let mut image_cache = thread_image_cache
-                    .lock()
-                    .expect("Error reading kennel image cache");
+                let mut image_cache = thread_image_cache.lock().await;
                 image_cache.take();
                 drop(image_cache);
             }
@@ -69,17 +87,15 @@ impl State {
             kennel: kennel_rc,
             is_shutdown: is_shutdown_rc,
             image_cache: image_cache_rc,
-            rng: Arc::new(Mutex::new(init_rng)),
+            subscribers: subscribers_rc,
         })
     }
 
-    pub fn as_image(&self, format: ImageFormat) -> Result<Vec<u8>, String> {
-        let mut image_cache = self.image_cache.lock().expect("Error reading image cache");
-        let kennel_rc = self.kennel.clone();
-        let cache_result = image_cache.get_or_insert_with(move || {
-            let kennel = kennel_rc.lock().expect("Error reading kennel state");
-            kennel.get_image(IMAGE_WIDTH, IMAGE_HEIGHT, format)
-        });
+    pub async fn as_image(&self, format: ImageFormat) -> Result<Vec<u8>, String> {
+        let mut image_cache = self.image_cache.lock().await;
+        let kennel = self.kennel.lock().await;
+        let cache_result = image_cache
+            .get_or_insert_with(move || kennel.get_image(IMAGE_WIDTH, IMAGE_HEIGHT, format));
 
         cache_result
             .as_ref()
@@ -87,8 +103,8 @@ impl State {
             .map_err(|message| message.clone())
     }
 
-    pub fn as_json(&self) -> Vec<CreatureJson> {
-        let kennel = self.kennel.lock().expect("Error reading kennel state");
+    pub async fn as_json(&self) -> Vec<CreatureJson> {
+        let kennel = self.kennel.lock().await;
 
         kennel
             .creatures()
@@ -97,8 +113,8 @@ impl State {
             .collect()
     }
 
-    pub fn get_creature(&self, id: &str) -> Option<CreatureJson> {
-        let kennel = self.kennel.lock().expect("Error reading kennel state");
+    pub async fn get_creature(&self, id: &str) -> Option<CreatureJson> {
+        let kennel = self.kennel.lock().await;
 
         kennel
             .creatures()
@@ -107,9 +123,9 @@ impl State {
             .map(CreatureJson::from)
     }
 
-    pub fn get_random_creature(&self) -> Option<CreatureJson> {
-        let mut rng = self.rng.lock().expect("Error reading rng state");
-        let kennel = self.kennel.lock().expect("Error reading kennel state");
+    pub async fn get_random_creature(&self) -> Option<CreatureJson> {
+        let mut rng = safe_rng();
+        let kennel = self.kennel.lock().await;
 
         kennel
             .creatures()
@@ -118,14 +134,27 @@ impl State {
             .map(CreatureJson::from)
     }
 
-    pub fn get_sprite(&self, id: &str) -> Option<Sprite> {
-        let kennel = self.kennel.lock().expect("Error reading kennel state");
+    pub async fn get_sprite(&self, id: &str) -> Option<Sprite> {
+        let kennel = self.kennel.lock().await;
         kennel.get_sprite(id).cloned()
     }
 
-    pub fn shutdown(&self) {
-        let mut is_shutdown = self.is_shutdown.lock().expect("Error shutting down kennel");
+    pub async fn subscribe(&self) -> (Uuid, Receiver<KennelJson>) {
+        let mut subscribers = self.subscribers.lock().await;
+        let (tx, rx) = mpsc::channel(1);
+        let id = Uuid::new_v4();
 
+        subscribers.insert(id, tx);
+        (id, rx)
+    }
+
+    pub async fn unsubscribe(&self, id: &Uuid) {
+        let mut subscribers = self.subscribers.lock().await;
+        subscribers.remove(id);
+    }
+
+    pub async fn shutdown(&self) {
+        let mut is_shutdown = self.is_shutdown.lock().await;
         *is_shutdown = true;
     }
 }
