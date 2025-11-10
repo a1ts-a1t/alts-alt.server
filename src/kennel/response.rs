@@ -22,7 +22,7 @@ pub enum Response {
 
 impl Response {
     pub fn new_json<T: Serialize>(json: T) -> Self {
-        let no_cache = Header::new("Cache-Control", "no-cache");
+        let no_cache = Header::new("Cache-Control", "no-cache, no-store");
         match serde_json::to_string(&json) {
             Ok(s) => Self::Json(s, ContentType::JSON, no_cache),
             Err(e) => Self::Err {
@@ -32,7 +32,7 @@ impl Response {
     }
 
     pub fn new_image(data: Vec<u8>, format: ImageFormat) -> Self {
-        let no_cache = Header::new("Cache-Control", "no-cache");
+        let no_cache = Header::new("Cache-Control", "no-cache, no-store");
         let content_type = ContentType::parse_flexible(format.to_mime_type())
             .expect("Error parsing image content type");
         Self::Image(data, content_type, no_cache)
