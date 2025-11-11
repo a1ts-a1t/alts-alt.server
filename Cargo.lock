@@ -455,9 +455,9 @@ dependencies = [
 
 [[package]]
 name = "exr"
-version = "1.73.0"
+version = "1.74.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f83197f59927b46c04a183a619b7c29df34e63e63c7869320862268c0ef687e0"
+checksum = "4300e043a56aa2cb633c01af81ca8f699a321879a7854d3896a0ba89056363be"
 dependencies = [
  "bit_field",
  "half",
@@ -1174,7 +1174,7 @@ dependencies = [
 [[package]]
 name = "kennel-club"
 version = "0.1.0"
-source = "git+https://github.com/a1ts-a1t/kennel-club.git#e47eebd2335b9a7d27edefa01c5d94c36c3c8530"
+source = "git+https://github.com/a1ts-a1t/kennel-club.git#e5ff04dc6a8fef3b8b7c4ab55469ce1fdb5fde15"
 dependencies = [
  "image",
  "itertools 0.14.0",

@@ -76,6 +76,23 @@ async fn creature_img_handler(creature_id: &str, kennel: &RocketState<Arc<State>
     }
 }
 
+#[get("/<creature_id>/img/<sprite_state>/<frame>")]
+async fn creature_img_by_handler(creature_id: &str, sprite_state: &str, frame: usize, kennel: &RocketState<Arc<State>>) -> Response {
+    let (bytes, format) = kennel
+        .get_sprite_by(creature_id, sprite_state, &frame)
+        .await
+        .map(|sprite| (sprite.bytes(), sprite.format()))
+        .unzip();
+
+    match (bytes, format) {
+        (Some(b), Some(f)) => Response::new_cached_image(b, f),
+        _ => Response::new_err(
+            http::Status::NotFound,
+            &format!("{} not found", creature_id),
+        ),
+    }
+}
+
 #[get("/<creature_id>/site")]
 async fn creature_site_handler(creature_id: &str, kennel: &RocketState<Arc<State>>) -> Response {
     match kennel.get_creature(creature_id).await {
@@ -109,6 +126,7 @@ pub fn kennel_routes() -> Vec<Route> {
         kennel_img_handler,
         creature_handler,
         creature_img_handler,
+        creature_img_by_handler,
         creature_site_handler,
         random_creature_handler,
         random_creature_site_handler,

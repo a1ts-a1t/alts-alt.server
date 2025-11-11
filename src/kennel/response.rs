@@ -11,6 +11,8 @@ pub enum Response {
     Json(String, ContentType, Header<'static>),
     #[response(status = 200)]
     Image(Vec<u8>, ContentType, Header<'static>),
+    #[response(status = 200)]
+    CachedImage(Vec<u8>, ContentType),
     Err {
         inner: (http::Status, String),
     },
@@ -36,6 +38,12 @@ impl Response {
         let content_type = ContentType::parse_flexible(format.to_mime_type())
             .expect("Error parsing image content type");
         Self::Image(data, content_type, no_cache)
+    }
+
+    pub fn new_cached_image(data: Vec<u8>, format: ImageFormat) -> Self {
+        let content_type = ContentType::parse_flexible(format.to_mime_type())
+            .expect("Error parsing image content type");
+        Self::CachedImage(data, content_type)
     }
 
     pub fn new_err(status: http::Status, message: &str) -> Self {

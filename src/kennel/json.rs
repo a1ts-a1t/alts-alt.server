@@ -1,4 +1,4 @@
-use kennel_club::{Kennel, creature::Creature, math::Vec2};
+use kennel_club::{creature::{self, Creature}, math::Vec2, Kennel};
 use serde::Serialize;
 
 #[derive(Serialize, Clone)]
@@ -8,18 +8,20 @@ pub struct CreatureJson {
     display_name: String,
     radius: f64,
     position: Vec2,
+    state: creature::State,
     sprite_path: String,
 }
 
 impl From<&Creature> for CreatureJson {
     fn from(creature: &Creature) -> Self {
-        let sprite_path = format!("/api/kennel-club/{}/img", creature.id);
+        let sprite_path = format!("/api/kennel-club/{}/img/{}/{}", creature.id, creature.sprite_state.to_string(), creature.sprite_state_duration);
         CreatureJson {
             id: creature.id.clone(),
             url: creature.url.clone(),
             display_name: creature.display_name.clone(),
             radius: creature.radius,
             position: creature.position,
+            state: creature.creature_state.clone(),
             sprite_path,
         }
     }
