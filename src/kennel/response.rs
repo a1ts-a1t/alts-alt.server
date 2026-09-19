@@ -12,7 +12,7 @@ pub enum Response {
     #[response(status = 200)]
     Image(Vec<u8>, ContentType, Header<'static>),
     #[response(status = 200)]
-    CachedImage(Vec<u8>, ContentType),
+    CachedImage(Vec<u8>, ContentType, Header<'static>),
     Err {
         inner: (http::Status, String),
     },
@@ -41,9 +41,13 @@ impl Response {
     }
 
     pub fn new_cached_image(data: Vec<u8>, format: ImageFormat) -> Self {
+        let immutable = Header::new(
+            "Cache-Control",
+            "public, max-age=31536000, immutable",
+        );
         let content_type = ContentType::parse_flexible(format.to_mime_type())
             .expect("Error parsing image content type");
-        Self::CachedImage(data, content_type)
+        Self::CachedImage(data, content_type, immutable)
     }
 
     pub fn new_err(status: http::Status, message: &str) -> Self {
