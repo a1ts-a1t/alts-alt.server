@@ -1,4 +1,5 @@
 use std::{
+    borrow::Borrow,
     collections::HashMap,
     hash::Hash,
     sync::Mutex,
@@ -25,7 +26,10 @@ impl<K: Eq + Hash, V: Clone> Cache<K, V> {
         }
     }
 
-    pub fn get(&self, key: &K) -> Option<V> {
+    pub fn get<Q: Eq + Hash + ?Sized>(&self, key: &Q) -> Option<V>
+    where
+        K: Borrow<Q>,
+    {
         let map = self.map.lock().expect("Lock cache data");
         map.get(key)
             .filter(|cache_item| cache_item.expiration > SystemTime::now())

@@ -2,23 +2,16 @@ mod cache;
 mod kennel;
 mod twitch;
 
+use std::future::IntoFuture;
+use std::time::Duration;
+
 use axum::extract::ws::{Message, WebSocketUpgrade};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{Router, get};
-use std::future::IntoFuture;
-use std::sync::Arc;
-use std::time::Duration;
 use tower_http::cors::CorsLayer;
 use tower_http::services::{ServeDir, ServeFile};
 
-use crate::cache::Cache;
-use crate::kennel::{init_kennel, kennel_routes, ws_kennel_routes};
-
-#[derive(Clone)]
-pub struct AppState {
-    pub cache: Arc<Cache<String, String>>,
-    pub kennel: Arc<kennel::State>,
-}
+use crate::kennel::init_kennel;
 
 async fn ping() -> &'static str {
     "pong"
@@ -64,10 +57,6 @@ async fn shutdown_signal() {
 #[tokio::main]
 async fn main() -> Result<(), String> {
     let kennel = init_kennel();
-    let state = AppState {
-        cache: Arc::new(Cache::default()),
-        kennel: kennel.clone(),
-    };
 
     let static_files =
         ServeDir::new("./static").fallback(ServeFile::new("./static/not_found.html"));
@@ -75,12 +64,10 @@ async fn main() -> Result<(), String> {
     let app = Router::new()
         .route("/ws/ping", get(ws_ping))
         .route("/api/ping", get(ping))
-        .route("/api/twitch", get(twitch::twitch))
-        .merge(kennel_routes())
-        .merge(ws_kennel_routes())
+        .merge(twitch::routes().with_state(twitch::TwitchState::new()))
+        .merge(kennel::routes().with_state(kennel.clone()))
         .fallback_service(static_files)
-        .layer(CorsLayer::very_permissive())
-        .with_state(state);
+        .layer(CorsLayer::very_permissive());
 
     let addr = std::env::var("SERVER_ADDRESS").unwrap_or_else(|_| "0.0.0.0:8000".to_string());
     let listener = tokio::net::TcpListener::bind(&addr)
@@ -101,7 +88,7 @@ async fn main() -> Result<(), String> {
         _ = shutdown_signal() => match tokio::time::timeout(Duration::from_secs(10), &mut serve).await {
             Ok(Ok(())) => {}
             Ok(Err(e)) => return Err(e.to_string()),
-            Err(_) => {} // 10s timeout ellapsed
+            Err(_) => {} // 10s timeout elapsed
         },
     }
 

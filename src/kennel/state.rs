@@ -21,14 +21,14 @@ fn safe_rng() -> StdRng {
     StdRng::from_rng(&mut rng)
 }
 
-pub struct State {
+pub struct KennelState {
     kennel: Arc<Mutex<Kennel>>,
     is_shutdown: Arc<Mutex<bool>>,
     image_cache: Arc<Mutex<ImageResult>>,
     subscribers: Arc<Mutex<HashMap<Uuid, Sender<KennelJson>>>>,
 }
 
-impl State {
+impl KennelState {
     pub fn load(dir: &Path) -> Result<Self, String> {
         let mut init_rng = safe_rng();
         let kennel = Kennel::load(dir, &mut init_rng)?;
@@ -80,7 +80,7 @@ impl State {
             }
         });
 
-        Ok(State {
+        Ok(KennelState {
             kennel: kennel_rc,
             is_shutdown: is_shutdown_rc,
             image_cache: image_cache_rc,
