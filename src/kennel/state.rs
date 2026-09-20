@@ -2,13 +2,10 @@ use std::{collections::HashMap, path::Path, sync::Arc, time::Duration};
 
 use kennel_club::{ImageFormat, Kennel, Sprite, State as SpriteState};
 use rand::{SeedableRng, rngs::StdRng, seq::IteratorRandom};
-use rocket::{
-    futures::lock::Mutex,
-    tokio::{
-        self,
-        sync::mpsc::{self, Receiver, Sender},
-        time::sleep,
-    },
+use tokio::sync::Mutex;
+use tokio::{
+    sync::mpsc::{self, Receiver, Sender},
+    time::sleep,
 };
 use uuid::Uuid;
 
@@ -139,7 +136,12 @@ impl State {
         kennel.get_sprite(id).cloned()
     }
 
-    pub async fn get_sprite_by(&self, id: &str, sprite_state: &str, frame: &usize) -> Option<Sprite> {
+    pub async fn get_sprite_by(
+        &self,
+        id: &str,
+        sprite_state: &str,
+        frame: &usize,
+    ) -> Option<Sprite> {
         let kennel = self.kennel.lock().await;
         SpriteState::try_from(sprite_state)
             .ok()

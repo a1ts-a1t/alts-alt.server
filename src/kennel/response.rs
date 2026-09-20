@@ -1,68 +1,91 @@
+use axum::http::{StatusCode, header};
+use axum::response::{IntoResponse, Response as AxumResponse};
 use kennel_club::ImageFormat;
-use rocket::{
-    Responder,
-    http::{self, ContentType, Header},
-};
 use serde::Serialize;
 
-#[derive(Responder)]
+const NO_CACHE: &str = "no-cache, no-store";
+const IMMUTABLE: &str = "public, max-age=31536000, immutable";
+
 pub enum Response {
-    #[response(status = 200)]
-    Json(String, ContentType, Header<'static>),
-    #[response(status = 200)]
-    Image(Vec<u8>, ContentType, Header<'static>),
-    #[response(status = 200)]
-    CachedImage(Vec<u8>, ContentType, Header<'static>),
-    Err {
-        inner: (http::Status, String),
-    },
-    #[response(status = 301)]
-    PermanentRedirect((), Header<'static>),
-    #[response(status = 302)]
-    TemporaryRedirect((), Header<'static>),
+    Json(String),
+    Image(Vec<u8>, &'static str),
+    CachedImage(Vec<u8>, &'static str),
+    Err { status: StatusCode, message: String },
+    PermanentRedirect(String),
+    TemporaryRedirect(String),
 }
 
 impl Response {
     pub fn new_json<T: Serialize>(json: T) -> Self {
-        let no_cache = Header::new("Cache-Control", "no-cache, no-store");
         match serde_json::to_string(&json) {
-            Ok(s) => Self::Json(s, ContentType::JSON, no_cache),
+            Ok(s) => Self::Json(s),
             Err(e) => Self::Err {
-                inner: (http::Status::InternalServerError, e.to_string()),
+                status: StatusCode::INTERNAL_SERVER_ERROR,
+                message: e.to_string(),
             },
         }
     }
 
     pub fn new_image(data: Vec<u8>, format: ImageFormat) -> Self {
-        let no_cache = Header::new("Cache-Control", "no-cache, no-store");
-        let content_type = ContentType::parse_flexible(format.to_mime_type())
-            .expect("Error parsing image content type");
-        Self::Image(data, content_type, no_cache)
+        Self::Image(data, format.to_mime_type())
     }
 
     pub fn new_cached_image(data: Vec<u8>, format: ImageFormat) -> Self {
-        let immutable = Header::new(
-            "Cache-Control",
-            "public, max-age=31536000, immutable",
-        );
-        let content_type = ContentType::parse_flexible(format.to_mime_type())
-            .expect("Error parsing image content type");
-        Self::CachedImage(data, content_type, immutable)
+        Self::CachedImage(data, format.to_mime_type())
     }
 
-    pub fn new_err(status: http::Status, message: &str) -> Self {
+    pub fn new_err(status: StatusCode, message: &str) -> Self {
         Self::Err {
-            inner: (status, message.to_string()),
+            status,
+            message: message.to_string(),
         }
     }
 
     pub fn new_permanent_redirect(location: String) -> Self {
-        let location = Header::new("Location", location);
-        Self::PermanentRedirect((), location)
+        Self::PermanentRedirect(location)
     }
 
     pub fn new_temporary_redirect(location: String) -> Self {
-        let location = Header::new("Location", location);
-        Self::TemporaryRedirect((), location)
+        Self::TemporaryRedirect(location)
+    }
+}
+
+impl IntoResponse for Response {
+    fn into_response(self) -> AxumResponse {
+        match self {
+            Self::Json(body) => (
+                [
+                    (header::CONTENT_TYPE, "application/json"),
+                    (header::CACHE_CONTROL, NO_CACHE),
+                ],
+                body,
+            )
+                .into_response(),
+            Self::Image(body, mime) => (
+                [
+                    (header::CONTENT_TYPE, mime),
+                    (header::CACHE_CONTROL, NO_CACHE),
+                ],
+                body,
+            )
+                .into_response(),
+            Self::CachedImage(body, mime) => (
+                [
+                    (header::CONTENT_TYPE, mime),
+                    (header::CACHE_CONTROL, IMMUTABLE),
+                ],
+                body,
+            )
+                .into_response(),
+            Self::Err { status, message } => (status, message).into_response(),
+            Self::PermanentRedirect(location) => (
+                StatusCode::MOVED_PERMANENTLY,
+                [(header::LOCATION, location)],
+            )
+                .into_response(),
+            Self::TemporaryRedirect(location) => {
+                (StatusCode::FOUND, [(header::LOCATION, location)]).into_response()
+            }
+        }
     }
 }

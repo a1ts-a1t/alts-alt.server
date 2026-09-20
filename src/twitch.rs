@@ -1,16 +1,15 @@
-use crate::cache::Cache;
+use crate::AppState;
+use axum::Json;
+use axum::extract::State;
+use axum::http::StatusCode;
+use futures_util::TryFutureExt;
 use reqwest::{Client, Response};
-use rocket::futures::TryFutureExt;
-use rocket::http;
-use rocket::serde::json::serde_json::{self, Value};
-use rocket::serde::json::{self, Json};
-use rocket::serde::{Deserialize, Serialize};
-use rocket::{State, get};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 const CACHE_KEY: &str = "IS_LIVE_TWITCH_API_CACHE_KEY";
 
 #[derive(Serialize, Deserialize)]
-#[serde(crate = "rocket::serde")]
 pub struct TwitchApiResponse {
     is_live: bool,
 }
@@ -42,14 +41,14 @@ async fn fetch_twitch_api_response() -> Result<TwitchApiResponse, String> {
         .map(|is_live| TwitchApiResponse { is_live })
 }
 
-#[get("/twitch")]
 pub async fn twitch_handler(
-    cache: &State<Cache<String, String>>,
-) -> Result<Json<TwitchApiResponse>, (http::Status, String)> {
+    State(state): State<AppState>,
+) -> Result<Json<TwitchApiResponse>, (StatusCode, String)> {
+    let cache = &state.cache;
     let cache_value = cache
         .get(&CACHE_KEY.to_string())
         .ok_or(())
-        .and_then(|val| json::from_str::<TwitchApiResponse>(&val).map_err(|_| ()));
+        .and_then(|val| serde_json::from_str::<TwitchApiResponse>(&val).map_err(|_| ()));
 
     match cache_value {
         Ok(val) => Ok(Json(val)),
@@ -62,7 +61,7 @@ pub async fn twitch_handler(
                 )
             })
             .map(Json)
-            .map_err(|e| (http::Status::InternalServerError, e))
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
         }
     }
 }

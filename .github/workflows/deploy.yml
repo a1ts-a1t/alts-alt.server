@@ -25,17 +25,11 @@ jobs:
           ssh-keyscan -H ${{ secrets.HOST_NAME }} > ~/.ssh/known_hosts
 
       - name: Sync server executable
-        run: rsync -av --delete --chmod=700 -p build/server ${{ secrets.USERNAME }}@${{ secrets.HOST_NAME }}:~/alts-alt
-
-      - name: Checkout repo
-        uses: actions/checkout@v4
-
-      - name: Sync server config
-        run: rsync -av --delete -p Rocket.toml ${{ secrets.USERNAME }}@${{ secrets.HOST_NAME }}:~/alts-alt
+        run: rsync -av --delete --chmod=700 -p build/server ${{ secrets.USERNAME }}@${{ secrets.HOST_NAME }}:~
 
       - name: Restart server
         run: |
-          ssh ${{ secrets.USERNAME }}@${{ secrets.HOST_NAME }} "./alts-alt/entrypoint.sh"
+          ssh ${{ secrets.USERNAME }}@${{ secrets.HOST_NAME }} "~/entrypoint.sh"
 
   verify:
     needs: deploy
