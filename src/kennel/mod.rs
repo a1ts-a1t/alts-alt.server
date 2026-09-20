@@ -131,9 +131,7 @@ async fn creature_site(
         .into_response())
 }
 
-async fn random_creature(
-    State(kennel): State<Arc<KennelState>>,
-) -> Result<Response, Error> {
+async fn random_creature(State(kennel): State<Arc<KennelState>>) -> Result<Response, Error> {
     let Some(creature) = kennel.get_random_creature().await? else {
         return Err(Error::NotFound("No creatures found".to_string()));
     };
@@ -141,9 +139,7 @@ async fn random_creature(
     Ok(([(header::CACHE_CONTROL, NO_CACHE)], Json(creature)).into_response())
 }
 
-async fn random_creature_site(
-    State(kennel): State<Arc<KennelState>>,
-) -> Result<Response, Error> {
+async fn random_creature_site(State(kennel): State<Arc<KennelState>>) -> Result<Response, Error> {
     let Some(creature) = kennel.get_random_creature().await? else {
         return Err(Error::NotFound("No creatures found".to_string()));
     };

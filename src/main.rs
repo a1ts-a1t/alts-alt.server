@@ -1,7 +1,7 @@
 mod cache;
 mod kennel;
-mod twitch;
 mod reverse_proxy;
+mod twitch;
 
 use std::future::IntoFuture;
 use std::time::Duration;
@@ -10,7 +10,6 @@ use axum::extract::ws::{Message, WebSocketUpgrade};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{Router, get};
 use tower_http::cors::CorsLayer;
-use tower_http::services::{ServeDir, ServeFile};
 
 use crate::kennel::init_kennel;
 use crate::reverse_proxy::{ReverseProxyConfig, reverse_proxy};

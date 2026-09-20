@@ -1,7 +1,12 @@
-use axum::{body::Body, extract::{Request, State}, http::Uri, response::{IntoResponse, Response}};
+use axum::{
+    body::Body,
+    extract::{Request, State},
+    http::Uri,
+    response::{IntoResponse, Response},
+};
+use hyper::StatusCode;
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::rt::TokioExecutor;
-use hyper::StatusCode;
 
 type Client = hyper_util::client::legacy::Client<HttpConnector, Body>;
 
@@ -21,7 +26,10 @@ impl ReverseProxyConfig {
     }
 }
 
-pub async fn reverse_proxy(State(config): State<ReverseProxyConfig>, mut req: Request) -> Result<Response, StatusCode> {
+pub async fn reverse_proxy(
+    State(config): State<ReverseProxyConfig>,
+    mut req: Request,
+) -> Result<Response, StatusCode> {
     let path = req.uri().path();
     let path_and_query = req
         .uri()
@@ -33,10 +41,10 @@ pub async fn reverse_proxy(State(config): State<ReverseProxyConfig>, mut req: Re
 
     *req.uri_mut() = Uri::try_from(uri).unwrap();
 
-    Ok(config.client
+    Ok(config
+        .client
         .request(req)
         .await
         .map_err(|_| StatusCode::BAD_REQUEST)?
         .into_response())
 }
-
