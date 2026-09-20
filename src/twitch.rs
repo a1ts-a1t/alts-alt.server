@@ -41,7 +41,7 @@ async fn fetch_twitch_api_response() -> Result<TwitchApiResponse, String> {
         .map(|is_live| TwitchApiResponse { is_live })
 }
 
-pub async fn twitch_handler(
+pub async fn twitch(
     State(state): State<AppState>,
 ) -> Result<Json<TwitchApiResponse>, (StatusCode, String)> {
     let cache = &state.cache;

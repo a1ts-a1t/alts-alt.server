@@ -20,11 +20,11 @@ pub struct AppState {
     pub kennel: Arc<kennel::State>,
 }
 
-async fn ping_handler() -> &'static str {
+async fn ping() -> &'static str {
     "pong"
 }
 
-async fn ws_ping_handler(ws: WebSocketUpgrade) -> Response {
+async fn ws_ping(ws: WebSocketUpgrade) -> Response {
     ws.on_upgrade(|mut socket| async move {
         while let Some(message) = socket.recv().await {
             if message.is_err() || matches!(message, Ok(Message::Close(_))) {
@@ -73,9 +73,9 @@ async fn main() -> Result<(), String> {
         ServeDir::new("./static").fallback(ServeFile::new("./static/not_found.html"));
 
     let app = Router::new()
-        .route("/ws/ping", get(ws_ping_handler))
-        .route("/api/ping", get(ping_handler))
-        .route("/api/twitch", get(twitch::twitch_handler))
+        .route("/ws/ping", get(ws_ping))
+        .route("/api/ping", get(ping))
+        .route("/api/twitch", get(twitch::twitch))
         .merge(kennel_routes())
         .merge(ws_kennel_routes())
         .fallback_service(static_files)

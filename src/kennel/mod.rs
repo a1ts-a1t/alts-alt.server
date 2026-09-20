@@ -24,18 +24,18 @@ pub fn init_kennel() -> Arc<State> {
     Arc::new(State::load(&dir).expect("Error loading kennel"))
 }
 
-async fn kennel_handler(AxumState(state): AxumState<AppState>) -> Response {
+async fn kennel(AxumState(state): AxumState<AppState>) -> Response {
     Response::new_json(state.kennel.as_json().await)
 }
 
-async fn kennel_img_handler(AxumState(state): AxumState<AppState>) -> Response {
+async fn kennel_img(AxumState(state): AxumState<AppState>) -> Response {
     match state.kennel.as_image(ImageFormat::Png).await {
         Ok(data) => Response::new_image(data, ImageFormat::Png),
         Err(message) => Response::new_err(StatusCode::INTERNAL_SERVER_ERROR, &message),
     }
 }
 
-async fn creature_handler(
+async fn creature(
     Path(creature_id): Path<String>,
     AxumState(state): AxumState<AppState>,
 ) -> Response {
@@ -45,7 +45,7 @@ async fn creature_handler(
     }
 }
 
-async fn creature_img_handler(
+async fn creature_img(
     Path(creature_id): Path<String>,
     AxumState(state): AxumState<AppState>,
 ) -> Response {
@@ -62,7 +62,7 @@ async fn creature_img_handler(
     }
 }
 
-async fn creature_img_by_handler(
+async fn creature_img_by(
     Path((creature_id, sprite_state, frame)): Path<(String, String, usize)>,
     AxumState(state): AxumState<AppState>,
 ) -> Response {
@@ -79,7 +79,7 @@ async fn creature_img_by_handler(
     }
 }
 
-async fn creature_site_handler(
+async fn creature_site(
     Path(creature_id): Path<String>,
     AxumState(state): AxumState<AppState>,
 ) -> Response {
@@ -89,14 +89,14 @@ async fn creature_site_handler(
     }
 }
 
-async fn random_creature_handler(AxumState(state): AxumState<AppState>) -> Response {
+async fn random_creature(AxumState(state): AxumState<AppState>) -> Response {
     match state.kennel.get_random_creature().await {
         Some(creature) => Response::new_json(creature),
         None => Response::new_err(StatusCode::NOT_FOUND, "No creatures found"),
     }
 }
 
-async fn random_creature_site_handler(AxumState(state): AxumState<AppState>) -> Response {
+async fn random_creature_site(AxumState(state): AxumState<AppState>) -> Response {
     match state.kennel.get_random_creature().await {
         Some(creature) => Response::new_temporary_redirect(creature.url()),
         None => Response::new_err(StatusCode::NOT_FOUND, "No creatures found"),
@@ -105,32 +105,20 @@ async fn random_creature_site_handler(AxumState(state): AxumState<AppState>) -> 
 
 pub fn kennel_routes() -> Router<crate::AppState> {
     Router::new()
-        .route("/api/kennel-club", get(kennel_handler))
-        .route("/api/kennel-club/img", get(kennel_img_handler))
-        .route("/api/kennel-club/random", get(random_creature_handler))
-        .route(
-            "/api/kennel-club/random/site",
-            get(random_creature_site_handler),
-        )
-        .route("/api/kennel-club/{creature_id}", get(creature_handler))
-        .route(
-            "/api/kennel-club/{creature_id}/img",
-            get(creature_img_handler),
-        )
+        .route("/api/kennel-club", get(kennel))
+        .route("/api/kennel-club/img", get(kennel_img))
+        .route("/api/kennel-club/random", get(random_creature))
+        .route("/api/kennel-club/random/site", get(random_creature_site))
+        .route("/api/kennel-club/{creature_id}", get(creature))
+        .route("/api/kennel-club/{creature_id}/img", get(creature_img))
         .route(
             "/api/kennel-club/{creature_id}/img/{sprite_state}/{frame}",
-            get(creature_img_by_handler),
+            get(creature_img_by),
         )
-        .route(
-            "/api/kennel-club/{creature_id}/site",
-            get(creature_site_handler),
-        )
+        .route("/api/kennel-club/{creature_id}/site", get(creature_site))
 }
 
-async fn ws_kennel_handler(
-    ws: WebSocketUpgrade,
-    AxumState(state): AxumState<AppState>,
-) -> AxumResponse {
+async fn ws_kennel(ws: WebSocketUpgrade, AxumState(state): AxumState<AppState>) -> AxumResponse {
     let kennel = state.kennel.clone();
     ws.on_upgrade(move |socket| async move {
         let (mut sender, receiver) = socket.split();
@@ -157,5 +145,5 @@ async fn ws_kennel_handler(
 }
 
 pub fn ws_kennel_routes() -> Router<crate::AppState> {
-    Router::new().route("/ws/kennel-club", get(ws_kennel_handler))
+    Router::new().route("/ws/kennel-club", get(ws_kennel))
 }
