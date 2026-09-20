@@ -1,6 +1,7 @@
 mod cache;
 mod kennel;
 mod twitch;
+mod reverse_proxy;
 
 use std::future::IntoFuture;
 use std::time::Duration;
@@ -12,6 +13,7 @@ use tower_http::cors::CorsLayer;
 use tower_http::services::{ServeDir, ServeFile};
 
 use crate::kennel::init_kennel;
+use crate::reverse_proxy::{ReverseProxyConfig, reverse_proxy};
 
 async fn ping() -> &'static str {
     "pong"
@@ -58,15 +60,16 @@ async fn shutdown_signal() {
 async fn main() -> Result<(), String> {
     let kennel = init_kennel();
 
-    let static_files =
-        ServeDir::new("./static").fallback(ServeFile::new("./static/not_found.html"));
+    let proxy = Router::new()
+        .fallback(reverse_proxy)
+        .with_state(ReverseProxyConfig::new("http://127.0.0.1:4321".to_string()));
 
     let app = Router::new()
         .route("/ws/ping", get(ws_ping))
         .route("/api/ping", get(ping))
         .merge(twitch::routes().with_state(twitch::TwitchState::new()))
         .merge(kennel::routes().with_state(kennel.clone()))
-        .fallback_service(static_files)
+        .merge(proxy)
         .layer(CorsLayer::very_permissive());
 
     let addr = std::env::var("SERVER_ADDRESS").unwrap_or_else(|_| "0.0.0.0:8000".to_string());
