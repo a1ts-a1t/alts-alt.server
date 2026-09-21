@@ -59,8 +59,9 @@ async fn shutdown_signal() {
 async fn main() -> Result<(), String> {
     let kennel = init_kennel();
 
+    let website_host = std::env::var("WEBSITE_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
     let website_port = std::env::var("WEBSITE_PORT").unwrap_or_else(|_| "4321".to_string());
-    let website_addr = format!("http://127.0.0.1:{website_port}");
+    let website_addr = format!("http://{website_host}:{website_port}");
 
     let proxy = Router::new()
         .fallback(reverse_proxy)

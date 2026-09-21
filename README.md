@@ -10,6 +10,6 @@ assuming you have docker on your system, run the following
 
 ```sh
 docker build -f dev.Dockerfile -t server:dev .
-docker run -p 8000:8000 server:dev
+docker run --rm -p 8000:8000 --add-host=host.docker.internal:host-gateway server:dev
 ```
 

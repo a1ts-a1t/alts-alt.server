@@ -45,6 +45,6 @@ pub async fn reverse_proxy(
         .client
         .request(req)
         .await
-        .map_err(|_| StatusCode::BAD_REQUEST)?
+        .map_err(|_| StatusCode::BAD_GATEWAY)?
         .into_response())
 }
