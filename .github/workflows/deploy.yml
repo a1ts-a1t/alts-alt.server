@@ -24,11 +24,11 @@ jobs:
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           ssh-keyscan -H ${{ secrets.HOST_NAME }} > ~/.ssh/known_hosts
 
-      - name: Sync server executable
-        run: rsync -av --delete --chmod=700 -p build/server ${{ secrets.USERNAME }}@${{ secrets.HOST_NAME }}:~/server
-
-      - name: Sync server Dockerfile
-        run: rsync -av --delete -p build/Dockerfile ${{ secrets.USERNAME }}@${{ secrets.HOST_NAME }}:~/server
+      - name: Sync server files
+        run: |
+          ssh ${{ secrets.USERNAME }}@${{ secrets.HOST_NAME }} "mkdir -p ~/server"
+          rsync -av --chmod=700 build/server ${{ secrets.USERNAME }}@${{ secrets.HOST_NAME }}:~/server/
+          rsync -av build/Dockerfile ${{ secrets.USERNAME }}@${{ secrets.HOST_NAME }}:~/server/
 
       - name: Restart server
         run: |
