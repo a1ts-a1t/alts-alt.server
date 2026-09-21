@@ -59,9 +59,12 @@ async fn shutdown_signal() {
 async fn main() -> Result<(), String> {
     let kennel = init_kennel();
 
+    let website_port = std::env::var("WEBSITE_PORT").unwrap_or_else(|_| "4321".to_string());
+    let website_addr = format!("http://127.0.0.1:{website_port}");
+
     let proxy = Router::new()
         .fallback(reverse_proxy)
-        .with_state(ReverseProxyConfig::new("http://127.0.0.1:4321".to_string()));
+        .with_state(ReverseProxyConfig::new(website_addr));
 
     let app = Router::new()
         .route("/ws/ping", get(ws_ping))
@@ -71,7 +74,8 @@ async fn main() -> Result<(), String> {
         .merge(proxy)
         .layer(CorsLayer::very_permissive());
 
-    let addr = std::env::var("SERVER_ADDRESS").unwrap_or_else(|_| "0.0.0.0:8000".to_string());
+    let port = std::env::var("SERVER_PORT").unwrap_or_else(|_| "8000".to_string());
+    let addr = format!("0.0.0.0:{port}");
     let listener = tokio::net::TcpListener::bind(&addr)
         .await
         .map_err(|e| e.to_string())?;

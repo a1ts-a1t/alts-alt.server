@@ -27,6 +27,9 @@ jobs:
       - name: Sync server executable
         run: rsync -av --delete --chmod=700 -p build/server ${{ secrets.USERNAME }}@${{ secrets.HOST_NAME }}:~
 
+      - name: Sync server Dockerfile
+        run: rsync -av --delete -p build/Dockerfile ${{ secrets.USERNAME }}@${{ secrets.HOST_NAME }}:~
+
       - name: Restart server
         run: |
           ssh ${{ secrets.USERNAME }}@${{ secrets.HOST_NAME }} "~/entrypoint.sh"

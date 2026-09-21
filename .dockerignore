@@ -1,0 +1,6 @@
+/target
+/private
+/kennel-club
+.git
+Dockerfile
+dev.Dockerfile
