@@ -16,3 +16,5 @@ jobs:
       - name: "Ping /ping"
         run: curl -f https://alts-alt.online/api/ping
 
+      - name: "Ping neocities"
+        run: curl -f https://alts-alt.neocities.org
