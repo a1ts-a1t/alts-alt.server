@@ -1,16 +1,34 @@
-use crate::cache::Cache;
+use std::sync::Arc;
+
+use axum::Json;
+use axum::extract::State;
+use axum::http::StatusCode;
+use axum::routing::{Router, get};
+use futures_util::TryFutureExt;
 use reqwest::{Client, Response};
-use rocket::futures::TryFutureExt;
-use rocket::http;
-use rocket::serde::json::serde_json::{self, Value};
-use rocket::serde::json::{self, Json};
-use rocket::serde::{Deserialize, Serialize};
-use rocket::{State, get};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+
+use crate::cache::Cache;
 
 const CACHE_KEY: &str = "IS_LIVE_TWITCH_API_CACHE_KEY";
 
+#[derive(Clone)]
+pub struct TwitchState {
+    client: Client,
+    cache: Arc<Cache<String, String>>,
+}
+
+impl TwitchState {
+    pub fn new() -> Self {
+        Self {
+            client: Client::new(),
+            cache: Arc::new(Cache::default()),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize)]
-#[serde(crate = "rocket::serde")]
 pub struct TwitchApiResponse {
     is_live: bool,
 }
@@ -30,8 +48,8 @@ async fn get_is_live_from_response(response: Response) -> Result<bool, String> {
         .map(|val| !val.is_null())
 }
 
-async fn fetch_twitch_api_response() -> Result<TwitchApiResponse, String> {
-    Client::new()
+async fn fetch_twitch_api_response(client: &Client) -> Result<TwitchApiResponse, String> {
+    client
         .post("https://gql.twitch.tv/gql")
         .body("{\"query\":\"query {\\n  user(login:\\\"alts_alt_\\\") {\\n stream {\\n id\\n}\\n}\\n}\"}")
         .header("Client-Id", "kimne78kx3ncx6brgo4mv6wki5h1ko")
@@ -42,27 +60,31 @@ async fn fetch_twitch_api_response() -> Result<TwitchApiResponse, String> {
         .map(|is_live| TwitchApiResponse { is_live })
 }
 
-#[get("/twitch")]
-pub async fn twitch_handler(
-    cache: &State<Cache<String, String>>,
-) -> Result<Json<TwitchApiResponse>, (http::Status, String)> {
-    let cache_value = cache
-        .get(&CACHE_KEY.to_string())
+async fn twitch(
+    State(state): State<TwitchState>,
+) -> Result<Json<TwitchApiResponse>, (StatusCode, String)> {
+    let cache_value = state
+        .cache
+        .get(CACHE_KEY)
         .ok_or(())
-        .and_then(|val| json::from_str::<TwitchApiResponse>(&val).map_err(|_| ()));
+        .and_then(|val| serde_json::from_str::<TwitchApiResponse>(&val).map_err(|_| ()));
 
     match cache_value {
         Ok(val) => Ok(Json(val)),
         Err(_) => {
-            let res = fetch_twitch_api_response().await;
+            let res = fetch_twitch_api_response(&state.client).await;
             res.inspect(|val| {
-                cache.put(
+                state.cache.put(
                     CACHE_KEY.to_string(),
                     serde_json::to_string(val).expect("Unable to deserialize Twitch API response."),
                 )
             })
             .map(Json)
-            .map_err(|e| (http::Status::InternalServerError, e))
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
         }
     }
+}
+
+pub fn routes() -> Router<TwitchState> {
+    Router::new().route("/api/twitch", get(twitch))
 }

@@ -1,7 +1,0 @@
-services:
-  server:
-    build:
-      dockerfile: dev.Dockerfile
-    ports:
-      - "8000:8000"
-

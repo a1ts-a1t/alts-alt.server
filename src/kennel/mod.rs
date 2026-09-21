@@ -1,168 +1,195 @@
 use std::{path::PathBuf, sync::Arc};
 
+use axum::Json;
+use axum::extract::ws::{Message, WebSocketUpgrade};
+use axum::extract::{Path, State};
+use axum::http::{StatusCode, header};
+use axum::response::{IntoResponse, Response};
+use axum::routing::{Router, get};
+use futures_util::{SinkExt, StreamExt};
 use kennel_club::ImageFormat;
-use rocket::{
-    Route, State as RocketState,
-    fairing::AdHoc,
-    futures::{SinkExt, StreamExt},
-    get,
-    http::{self},
-    routes,
-};
-pub use state::State;
 use tokio_stream::wrappers::ReceiverStream;
-use ws::{Message, WebSocket};
 
-use crate::kennel::{response::Response, stream::greedy_zip};
+use crate::kennel::stream::greedy_zip;
 
 mod json;
-mod response;
 mod state;
 mod stream;
 
-pub fn init_kennel() -> (Arc<State>, AdHoc) {
+pub use state::KennelState;
+
+const NO_CACHE: &str = "no-cache, no-store";
+const IMMUTABLE: &str = "public, max-age=31536000, immutable";
+
+enum Error {
+    Internal(String),
+    NotFound(String),
+}
+
+impl From<String> for Error {
+    fn from(message: String) -> Self {
+        Error::Internal(message)
+    }
+}
+
+impl IntoResponse for Error {
+    fn into_response(self) -> Response {
+        match self {
+            Error::Internal(message) => (StatusCode::INTERNAL_SERVER_ERROR, message),
+            Error::NotFound(message) => (StatusCode::NOT_FOUND, message),
+        }
+        .into_response()
+    }
+}
+
+pub fn init_kennel() -> Arc<KennelState> {
     let dir = PathBuf::from("./kennel-club");
-    let kennel = State::load(&dir).expect("Error loading kennel");
-    let kennel = Arc::new(kennel);
-
-    let kennel_clone = kennel.clone();
-    let cleanup = AdHoc::on_shutdown("Kennel shutdown", |_| {
-        Box::pin(async move {
-            kennel_clone.shutdown().await;
-        })
-    });
-
-    (kennel, cleanup)
+    Arc::new(KennelState::load(&dir))
 }
 
-#[get("/")]
-async fn kennel_handler(kennel: &RocketState<Arc<State>>) -> Response {
-    Response::new_json(kennel.as_json().await)
+async fn kennel(State(kennel): State<Arc<KennelState>>) -> Result<Response, Error> {
+    let creatures = kennel.as_json().await?;
+
+    Ok(([(header::CACHE_CONTROL, NO_CACHE)], Json(creatures)).into_response())
 }
 
-#[get("/img")]
-async fn kennel_img_handler(kennel: &RocketState<Arc<State>>) -> Response {
-    match kennel.as_image(ImageFormat::Png).await {
-        Ok(data) => Response::new_image(data, ImageFormat::Png),
-        Err(message) => Response::new_err(http::Status::InternalServerError, &message),
-    }
+async fn kennel_img(State(kennel): State<Arc<KennelState>>) -> Result<Response, Error> {
+    let data = kennel.as_image(ImageFormat::Png).await?;
+
+    Ok((
+        [
+            (header::CONTENT_TYPE, ImageFormat::Png.to_mime_type()),
+            (header::CACHE_CONTROL, NO_CACHE),
+        ],
+        data,
+    )
+        .into_response())
 }
 
-#[get("/<creature_id>")]
-async fn creature_handler(creature_id: &str, kennel: &RocketState<Arc<State>>) -> Response {
-    match kennel.get_creature(creature_id).await {
-        Some(creature) => Response::new_json(creature),
-        None => Response::new_err(
-            http::Status::NotFound,
-            &format!("{} not found", creature_id),
-        ),
-    }
+async fn creature(
+    Path(creature_id): Path<String>,
+    State(kennel): State<Arc<KennelState>>,
+) -> Result<Response, Error> {
+    let Some(creature) = kennel.get_creature(&creature_id).await? else {
+        return Err(Error::NotFound(format!("{creature_id} not found")));
+    };
+
+    Ok(([(header::CACHE_CONTROL, NO_CACHE)], Json(creature)).into_response())
 }
 
-#[get("/<creature_id>/img")]
-async fn creature_img_handler(creature_id: &str, kennel: &RocketState<Arc<State>>) -> Response {
-    let (bytes, format) = kennel
-        .get_sprite(creature_id)
-        .await
-        .map(|sprite| (sprite.bytes(), sprite.format()))
-        .unzip();
+async fn creature_img(
+    Path(creature_id): Path<String>,
+    State(kennel): State<Arc<KennelState>>,
+) -> Result<Response, Error> {
+    let Some(sprite) = kennel.get_sprite(&creature_id).await? else {
+        return Err(Error::NotFound(format!("{creature_id} not found")));
+    };
 
-    match (bytes, format) {
-        (Some(b), Some(f)) => Response::new_image(b, f),
-        _ => Response::new_err(
-            http::Status::NotFound,
-            &format!("{} not found", creature_id),
-        ),
-    }
+    Ok((
+        [
+            (header::CONTENT_TYPE, sprite.format().to_mime_type()),
+            (header::CACHE_CONTROL, NO_CACHE),
+        ],
+        sprite.bytes(),
+    )
+        .into_response())
 }
 
-#[get("/<creature_id>/img/<sprite_state>/<frame>")]
-async fn creature_img_by_handler(creature_id: &str, sprite_state: &str, frame: usize, kennel: &RocketState<Arc<State>>) -> Response {
-    let (bytes, format) = kennel
-        .get_sprite_by(creature_id, sprite_state, &frame)
-        .await
-        .map(|sprite| (sprite.bytes(), sprite.format()))
-        .unzip();
+async fn creature_img_by(
+    Path((creature_id, sprite_state, frame)): Path<(String, String, usize)>,
+    State(kennel): State<Arc<KennelState>>,
+) -> Result<Response, Error> {
+    let Some(sprite) = kennel
+        .get_sprite_by(&creature_id, &sprite_state, &frame)
+        .await?
+    else {
+        return Err(Error::NotFound(format!("{creature_id} not found")));
+    };
 
-    match (bytes, format) {
-        (Some(b), Some(f)) => Response::new_cached_image(b, f),
-        _ => Response::new_err(
-            http::Status::NotFound,
-            &format!("{} not found", creature_id),
-        ),
-    }
+    Ok((
+        [
+            (header::CONTENT_TYPE, sprite.format().to_mime_type()),
+            (header::CACHE_CONTROL, IMMUTABLE),
+        ],
+        sprite.bytes(),
+    )
+        .into_response())
 }
 
-#[get("/<creature_id>/site")]
-async fn creature_site_handler(creature_id: &str, kennel: &RocketState<Arc<State>>) -> Response {
-    match kennel.get_creature(creature_id).await {
-        Some(creature) => Response::new_permanent_redirect(creature.url()),
-        None => Response::new_err(
-            http::Status::NotFound,
-            &format!("{} not found", creature_id),
-        ),
-    }
+async fn creature_site(
+    Path(creature_id): Path<String>,
+    State(kennel): State<Arc<KennelState>>,
+) -> Result<Response, Error> {
+    let Some(creature) = kennel.get_creature(&creature_id).await? else {
+        return Err(Error::NotFound(format!("{creature_id} not found")));
+    };
+
+    Ok((
+        StatusCode::MOVED_PERMANENTLY,
+        [(header::LOCATION, creature.url())],
+    )
+        .into_response())
 }
 
-#[get("/random")]
-async fn random_creature_handler(kennel: &RocketState<Arc<State>>) -> Response {
-    match kennel.get_random_creature().await {
-        Some(creature) => Response::new_json(creature),
-        None => Response::new_err(http::Status::NotFound, "No creatures found"),
-    }
+async fn random_creature(State(kennel): State<Arc<KennelState>>) -> Result<Response, Error> {
+    let Some(creature) = kennel.get_random_creature().await? else {
+        return Err(Error::NotFound("No creatures found".to_string()));
+    };
+
+    Ok(([(header::CACHE_CONTROL, NO_CACHE)], Json(creature)).into_response())
 }
 
-#[get("/random/site")]
-async fn random_creature_site_handler(kennel: &RocketState<Arc<State>>) -> Response {
-    match kennel.get_random_creature().await {
-        Some(creature) => Response::new_temporary_redirect(creature.url()),
-        None => Response::new_err(http::Status::NotFound, "No creatures found"),
-    }
+async fn random_creature_site(State(kennel): State<Arc<KennelState>>) -> Result<Response, Error> {
+    let Some(creature) = kennel.get_random_creature().await? else {
+        return Err(Error::NotFound("No creatures found".to_string()));
+    };
+
+    Ok((StatusCode::FOUND, [(header::LOCATION, creature.url())]).into_response())
 }
 
-pub fn kennel_routes() -> Vec<Route> {
-    routes![
-        kennel_handler,
-        kennel_img_handler,
-        creature_handler,
-        creature_img_handler,
-        creature_img_by_handler,
-        creature_site_handler,
-        random_creature_handler,
-        random_creature_site_handler,
-    ]
-}
+async fn ws_kennel(
+    ws: WebSocketUpgrade,
+    State(kennel): State<Arc<KennelState>>,
+) -> Result<Response, Error> {
+    kennel.availability()?;
 
-#[get("/")]
-fn ws_kennel_handler(ws: WebSocket, kennel: &RocketState<Arc<State>>) -> ws::Channel<'static> {
-    let kennel_state = kennel.inner().clone();
-    ws.channel(move |mut message_stream| {
-        Box::pin(async move {
-            let (uuid, receiver) = kennel_state.subscribe().await;
-            let mut stream = greedy_zip(message_stream.by_ref(), ReceiverStream::new(receiver));
+    Ok(ws
+        .on_upgrade(move |socket| async move {
+            let (mut sender, receiver) = socket.split();
+            let (uuid, broadcast) = kennel.subscribe().await;
+            let mut stream = greedy_zip(receiver, ReceiverStream::new(broadcast));
 
             while let Some((message, kennel_json)) = stream.next().await {
                 match (message, kennel_json) {
                     (Some(Ok(Message::Close(_))), _) | (Some(Err(_)), _) => break,
                     (_, Some(json)) => {
-                        let (sender, _) = stream.get_mut();
-                        if let Ok(json_str) = serde_json::to_string(&json) {
-                            sender.send(Message::text(json_str)).await.unwrap();
+                        if let Ok(json_str) = serde_json::to_string(&json)
+                            && sender.send(Message::text(json_str)).await.is_err()
+                        {
+                            break;
                         }
                     }
                     (_, _) => {}
-                };
+                }
             }
 
-            let (_, receiver_stream) = stream.get_mut();
-            kennel_state.unsubscribe(&uuid).await;
-            receiver_stream.close();
-
-            Ok(())
+            kennel.unsubscribe(&uuid).await;
         })
-    })
+        .into_response())
 }
 
-pub fn ws_kennel_routes() -> Vec<Route> {
-    routes![ws_kennel_handler,]
+pub fn routes() -> Router<Arc<KennelState>> {
+    Router::new()
+        .route("/api/kennel-club", get(kennel))
+        .route("/api/kennel-club/img", get(kennel_img))
+        .route("/api/kennel-club/random", get(random_creature))
+        .route("/api/kennel-club/random/site", get(random_creature_site))
+        .route("/api/kennel-club/{creature_id}", get(creature))
+        .route("/api/kennel-club/{creature_id}/img", get(creature_img))
+        .route(
+            "/api/kennel-club/{creature_id}/img/{sprite_state}/{frame}",
+            get(creature_img_by),
+        )
+        .route("/api/kennel-club/{creature_id}/site", get(creature_site))
+        .route("/ws/kennel-club", get(ws_kennel))
 }

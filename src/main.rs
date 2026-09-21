@@ -1,64 +1,104 @@
 mod cache;
-mod cors;
 mod kennel;
+mod reverse_proxy;
 mod twitch;
 
-use cache::Cache;
-use cors::Cors;
-use rocket::fs::{FileServer, NamedFile};
-use rocket::futures::{SinkExt, StreamExt};
-use rocket::{catch, catchers, get, routes};
-use std::path::Path;
-use twitch::twitch_handler;
-use ws::Message;
+use std::future::IntoFuture;
+use std::time::Duration;
 
-use crate::kennel::{init_kennel, kennel_routes, ws_kennel_routes};
+use axum::extract::ws::{Message, WebSocketUpgrade};
+use axum::response::{IntoResponse, Response};
+use axum::routing::{Router, get};
+use tower_http::cors::CorsLayer;
 
-#[catch(404)]
-async fn not_found() -> Option<NamedFile> {
-    NamedFile::open(Path::new("./static/not_found.html"))
-        .await
-        .ok()
-}
+use crate::kennel::init_kennel;
+use crate::reverse_proxy::{ReverseProxyConfig, reverse_proxy};
 
-#[get("/ping")]
-fn ping_handler() -> &'static str {
+async fn ping() -> &'static str {
     "pong"
 }
 
-#[get("/ping")]
-fn ws_ping_handler(ws: ws::WebSocket) -> ws::Channel<'static> {
-    ws.channel(move |mut stream| {
-        Box::pin(async move {
-            while let Some(message) = stream.next().await {
-                match message {
-                    Ok(Message::Close(_)) | Err(_) => break,
-                    Ok(Message::Text(_)) => stream.send(Message::text("pong")).await?,
-                    _ => {}
-                }
+async fn ws_ping(ws: WebSocketUpgrade) -> Response {
+    ws.on_upgrade(|mut socket| async move {
+        while let Some(message) = socket.recv().await {
+            if message.is_err() || matches!(message, Ok(Message::Close(_))) {
+                break;
             }
-
-            Ok(())
-        })
+            if matches!(message, Ok(Message::Text(_)))
+                && socket.send(Message::text("pong")).await.is_err()
+            {
+                break;
+            }
+        }
     })
+    .into_response()
 }
 
-#[rocket::main]
-async fn main() -> Result<(), String> {
-    let (kennel, kennel_cleanup) = init_kennel();
-    let _server = rocket::build()
-        .mount("/api/kennel-club", kennel_routes())
-        .mount("/api", routes![ping_handler, twitch_handler,])
-        .mount("/ws/kennel-club", ws_kennel_routes())
-        .mount("/ws", routes![ws_ping_handler])
-        .mount("/", FileServer::from("./static"))
-        .register("/", catchers![not_found])
-        .manage(Cache::<String, String>::default())
-        .manage(kennel)
-        .attach(kennel_cleanup)
-        .attach(Cors)
-        .launch()
-        .await;
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl+C handler");
+    };
+    #[cfg(unix)]
+    let terminate = async {
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("failed to install SIGTERM handler")
+            .recv()
+            .await;
+    };
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = terminate => {},
+    }
+}
 
+#[tokio::main]
+async fn main() -> Result<(), String> {
+    let kennel = init_kennel();
+
+    let website_host = std::env::var("WEBSITE_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
+    let website_port = std::env::var("WEBSITE_PORT").unwrap_or_else(|_| "4321".to_string());
+    let website_addr = format!("http://{website_host}:{website_port}");
+
+    let proxy = Router::new()
+        .fallback(reverse_proxy)
+        .with_state(ReverseProxyConfig::new(website_addr));
+
+    let app = Router::new()
+        .route("/ws/ping", get(ws_ping))
+        .route("/api/ping", get(ping))
+        .merge(twitch::routes().with_state(twitch::TwitchState::new()))
+        .merge(kennel::routes().with_state(kennel.clone()))
+        .merge(proxy)
+        .layer(CorsLayer::very_permissive());
+
+    let port = std::env::var("SERVER_PORT").unwrap_or_else(|_| "8000".to_string());
+    let addr = format!("0.0.0.0:{port}");
+    let listener = tokio::net::TcpListener::bind(&addr)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let mut serve = axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal())
+        .into_future();
+
+    // force ungraceful shutdown on 10 second timeout of a shutdown signal
+    // or else WS connections will keep it open
+    tokio::select! {
+        res = &mut serve => match res {
+            Ok(()) => {}
+            Err(e) => return Err(e.to_string()),
+        },
+        _ = shutdown_signal() => match tokio::time::timeout(Duration::from_secs(10), &mut serve).await {
+            Ok(Ok(())) => {}
+            Ok(Err(e)) => return Err(e.to_string()),
+            Err(_) => {} // 10s timeout elapsed
+        },
+    }
+
+    kennel.shutdown().await;
     Ok(())
 }

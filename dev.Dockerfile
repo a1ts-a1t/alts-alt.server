@@ -1,24 +1,28 @@
-FROM docker.io/rust:1-alpine3.22 AS build
+FROM rust:1-alpine3.22
+
+RUN apk add --no-cache openssl-dev musl-dev openssl-libs-static
+
+RUN addgroup -S server && adduser -S server -G server
+
+WORKDIR /src
 
 COPY . .
-
-RUN apk add openssl-dev musl-dev openssl-libs-static
 RUN cargo build -r
-RUN objcopy --compress-debug-sections target/release/server ./server
 
-FROM docker.io/alpine:3.22.0
-
-# server
-COPY --from=build /server ./server
-COPY ./Rocket.toml ./Rocket.toml
-
-# static resources
-ADD https://alts-alt.online ./static/not_found.html
-ADD https://alts-alt.online/main.js ./static/main.js
-ADD https://alts-alt.online/favicon.ico ./static/favicon.ico
-
-# kennel club
+# bring in kennel club data
 ADD https://github.com/a1ts-a1t/kennel-club.git#:data ./kennel-club
 
-EXPOSE 8000
-CMD ["./server"]
+ARG SERVER_PORT=8000
+
+ENV SERVER_PORT=${SERVER_PORT}
+ENV WEBSITE_PORT=4321
+ENV WEBSITE_HOST=host.docker.internal
+
+EXPOSE ${SERVER_PORT}
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD wget -qO /dev/null "http://0.0.0.0:${SERVER_PORT}/api/ping" || exit 1
+
+USER server
+CMD ["./target/release/server"]
+

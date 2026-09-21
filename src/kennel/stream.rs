@@ -1,7 +1,7 @@
 use std::task::{Context, Poll};
 
+use futures_util::stream::{Fuse, Stream, StreamExt};
 use pin_project_lite::pin_project;
-use rocket::futures::stream::{Fuse, Stream, StreamExt};
 
 pin_project! {
     #[derive(Debug)]
@@ -19,10 +19,6 @@ impl<S1: Stream, S2: Stream> GreedyZip<S1, S2> {
             stream1: stream1.fuse(),
             stream2: stream2.fuse(),
         }
-    }
-
-    pub fn get_mut(&mut self) -> (&mut S1, &mut S2) {
-        (self.stream1.get_mut(), self.stream2.get_mut())
     }
 }
 

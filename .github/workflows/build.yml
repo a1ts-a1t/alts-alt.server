@@ -25,7 +25,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: build
-          path: ./server
+          path: |
+            server
+            Dockerfile
           if-no-files-found: error
           overwrite: true
 
