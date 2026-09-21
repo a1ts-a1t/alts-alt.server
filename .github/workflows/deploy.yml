@@ -9,7 +9,31 @@ on:
 
 jobs:
   build:
-    uses: ./.github/workflows/build.yml
+    runs-on: ubuntu-latest
+    container:
+      image: rust:1-alpine3.22
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: apk add openssl-dev musl-dev openssl-libs-static
+
+      - name: Build executable
+        run: cargo build -r
+
+      - name: Compress debug sections
+        run: objcopy --compress-debug-sections target/release/server ./server
+
+      - name: Publish artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: build
+          path: |
+            server
+            Dockerfile
+          if-no-files-found: error
+          overwrite: true
 
   deploy:
     runs-on: ubuntu-latest
@@ -37,4 +61,3 @@ jobs:
   verify:
     needs: deploy
     uses: ./.github/workflows/canary.yml
-
