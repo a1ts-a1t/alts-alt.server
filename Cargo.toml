@@ -17,4 +17,5 @@ uuid = { version = "1.18.1", features = ["v4"] }
 tokio-stream = "0.1.17"
 pin-project-lite = "0.2"
 hyper-util = "0.1.20"
+hyper-tls = "0.6"
 hyper = "1.11.1"

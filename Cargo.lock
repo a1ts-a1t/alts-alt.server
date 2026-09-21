@@ -1764,6 +1764,7 @@ dependencies = [
  "axum",
  "futures-util",
  "hyper",
+ "hyper-tls",
  "hyper-util",
  "kennel-club",
  "pin-project-lite",

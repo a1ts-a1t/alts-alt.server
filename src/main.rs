@@ -59,13 +59,12 @@ async fn shutdown_signal() {
 async fn main() -> Result<(), String> {
     let kennel = init_kennel();
 
-    let website_host = std::env::var("WEBSITE_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
-    let website_port = std::env::var("WEBSITE_PORT").unwrap_or_else(|_| "4321".to_string());
-    let website_addr = format!("http://{website_host}:{website_port}");
+    let website_origin =
+        std::env::var("WEBSITE_ORIGIN").unwrap_or_else(|_| "http://0.0.0.0:8080".to_string());
 
     let proxy = Router::new()
         .fallback(reverse_proxy)
-        .with_state(ReverseProxyConfig::new(website_addr));
+        .with_state(ReverseProxyConfig::new(website_origin));
 
     let app = Router::new()
         .route("/ws/ping", get(ws_ping))
