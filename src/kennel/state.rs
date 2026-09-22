@@ -13,6 +13,7 @@ use crate::kennel::json::{CreatureJson, KennelJson};
 
 static IMAGE_WIDTH: u32 = 2048;
 static IMAGE_HEIGHT: u32 = 2048;
+static FRAME_DURATION: Duration = Duration::from_millis(1000 / 12); // 12 fps
 
 type ImageResult = Option<Result<Vec<u8>, String>>;
 
@@ -69,7 +70,7 @@ impl KennelState {
                 }
                 drop(is_shutdown);
 
-                sleep(Duration::from_secs(1)).await;
+                sleep(FRAME_DURATION).await;
 
                 // update kennel state
                 let mut kennel = thread_kennel.lock().await;

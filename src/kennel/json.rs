@@ -14,14 +14,27 @@ pub struct CreatureJson {
     position: Vec2,
     state: creature::State,
     sprite_path: String,
+    sprite_paths: Vec<String>,
 }
 
 impl From<&Creature> for CreatureJson {
     fn from(creature: &Creature) -> Self {
+        let sprite_paths: Vec<String> = creature
+            .sprite_sheet
+            .get_info()
+            .into_iter()
+            .flat_map(|(state, len)| {
+                (0_usize..len).map(move |frame| {
+                    format!("/api/kennel-club/{}/img/{}/{}", creature.id, state, frame)
+                })
+            })
+            .collect();
+
         let sprite_path = format!(
             "/api/kennel-club/{}/img/{}/{}",
             creature.id, creature.sprite_state, creature.sprite_state_duration
         );
+
         CreatureJson {
             id: creature.id.clone(),
             url: creature.url.clone(),
@@ -30,6 +43,7 @@ impl From<&Creature> for CreatureJson {
             position: creature.position,
             state: creature.creature_state.clone(),
             sprite_path,
+            sprite_paths,
         }
     }
 }
