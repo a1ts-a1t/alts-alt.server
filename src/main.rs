@@ -60,7 +60,7 @@ async fn main() -> Result<(), String> {
     let kennel = init_kennel();
 
     let website_origin =
-        std::env::var("WEBSITE_ORIGIN").unwrap_or_else(|_| "http://0.0.0.0:8080".to_string());
+        std::env::var("WEBSITE_ORIGIN").unwrap_or_else(|_| "http://0.0.0.0:4321".to_string());
 
     let proxy = Router::new()
         .fallback(reverse_proxy)

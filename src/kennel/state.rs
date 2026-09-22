@@ -82,7 +82,7 @@ impl KennelState {
 
                 let kennel_json = KennelJson::from(&next_kennel);
                 for subscriber in subscribers.values() {
-                    let _ = subscriber.send(kennel_json.clone()).await;
+                    let _ = subscriber.try_send(kennel_json.clone());
                 }
                 drop(subscribers);
 
