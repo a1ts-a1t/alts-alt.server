@@ -155,7 +155,7 @@ impl KennelState {
         let kennel = self.loaded()?.lock().await;
         Ok(SpriteState::try_from(sprite_state)
             .ok()
-            .and_then(|s| kennel.get_sprite_by(id, &s, frame).cloned()))
+            .and_then(|s| kennel.get_sprite_by(id, s, frame).cloned()))
     }
 
     pub async fn subscribe(&self) -> (Uuid, Receiver<KennelJson>) {

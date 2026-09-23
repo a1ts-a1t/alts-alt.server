@@ -977,7 +977,7 @@ dependencies = [
 [[package]]
 name = "kennel-club"
 version = "0.1.0"
-source = "git+https://github.com/a1ts-a1t/kennel-club.git#47035b4f989c6c6ebdb9e68beb4e98000b014280"
+source = "git+https://github.com/a1ts-a1t/kennel-club.git#c4dc1a1ab2abbb5cef3fa43689c30840f6cceef9"
 dependencies = [
  "image",
  "itertools 0.14.0",
