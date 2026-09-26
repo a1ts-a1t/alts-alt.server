@@ -19,7 +19,7 @@ mod stream;
 pub use state::KennelState;
 
 const NO_CACHE: &str = "no-cache, no-store";
-const IMMUTABLE: &str = "public, max-age=31536000, immutable";
+const SPRITE_CACHE: &str = "public, max-age=3600";
 
 enum Error {
     Internal(String),
@@ -109,7 +109,7 @@ async fn creature_img_by(
     Ok((
         [
             (header::CONTENT_TYPE, sprite.format().to_mime_type()),
-            (header::CACHE_CONTROL, IMMUTABLE),
+            (header::CACHE_CONTROL, SPRITE_CACHE),
         ],
         sprite.bytes(),
     )
