@@ -10,6 +10,8 @@ use axum::extract::ws::{Message, WebSocketUpgrade};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{Router, get};
 use tower_http::cors::CorsLayer;
+use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
+use tracing::Level;
 
 use crate::kennel::init_kennel;
 use crate::reverse_proxy::{ReverseProxyConfig, reverse_proxy};
@@ -57,6 +59,12 @@ async fn shutdown_signal() {
 
 #[tokio::main]
 async fn main() -> Result<(), String> {
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
+        )
+        .init();
+
     let kennel = init_kennel();
 
     let website_origin =
@@ -72,7 +80,12 @@ async fn main() -> Result<(), String> {
         .merge(twitch::routes().with_state(twitch::TwitchState::new()))
         .merge(kennel::routes().with_state(kennel.clone()))
         .merge(proxy)
-        .layer(CorsLayer::very_permissive());
+        .layer(CorsLayer::very_permissive())
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(DefaultMakeSpan::new().level(Level::INFO))
+                .on_response(DefaultOnResponse::new().level(Level::INFO)),
+        );
 
     let port = std::env::var("SERVER_PORT").unwrap_or_else(|_| "8000".to_string());
     let addr = format!("0.0.0.0:{port}");
@@ -80,6 +93,7 @@ async fn main() -> Result<(), String> {
         .await
         .map_err(|e| e.to_string())?;
 
+    tracing::info!("Listening on {addr}");
     let mut serve = axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())
         .into_future();
