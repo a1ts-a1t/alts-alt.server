@@ -37,7 +37,7 @@ jobs:
 
   build-image:
     runs-on: ubuntu-latest
-    needs: build
+    needs: build-executable
     steps:
       - name: Download build artifact
         uses: actions/download-artifact@v4
