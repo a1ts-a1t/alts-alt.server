@@ -2,6 +2,7 @@ mod cache;
 mod kennel;
 mod reverse_proxy;
 mod twitch;
+mod website;
 
 use std::future::IntoFuture;
 use std::time::Duration;
@@ -14,7 +15,7 @@ use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
 use tracing::Level;
 
 use crate::kennel::init_kennel;
-use crate::reverse_proxy::{ReverseProxyConfig, reverse_proxy};
+use crate::website::website_router;
 
 async fn ping() -> &'static str {
     "pong"
@@ -67,19 +68,12 @@ async fn main() -> Result<(), String> {
 
     let kennel = init_kennel();
 
-    let website_origin =
-        std::env::var("WEBSITE_ORIGIN").unwrap_or_else(|_| "http://0.0.0.0:4321".to_string());
-
-    let proxy = Router::new()
-        .fallback(reverse_proxy)
-        .with_state(ReverseProxyConfig::new(website_origin));
-
     let app = Router::new()
         .route("/ws/ping", get(ws_ping))
         .route("/api/ping", get(ping))
         .merge(twitch::routes().with_state(twitch::TwitchState::new()))
         .merge(kennel::routes().with_state(kennel.clone()))
-        .merge(proxy)
+        .merge(website_router())
         .layer(CorsLayer::very_permissive())
         .layer(
             TraceLayer::new_for_http()
