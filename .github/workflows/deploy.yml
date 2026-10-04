@@ -53,13 +53,13 @@ jobs:
             .
 
       - name: Export image
-        run: docker save alts-alt/server:prod | gzip > server-image.tar.gz
+        run: docker save alts-alt/server:prod | gzip > server.tar.gz
 
       - name: Publish image artifact
         uses: actions/upload-artifact@v4
         with:
           name: server-image
-          path: server-image.tar.gz
+          path: server.tar.gz
           if-no-files-found: error
           overwrite: true
 
@@ -81,10 +81,14 @@ jobs:
             echo "keyscan attempt $i failed, retrying in 10s"; sleep 10
           done
           test -s ~/.ssh/known_hosts
-      - name: Ship image and restart
+
+      - name: Sync image
         run: |
-          rsync -av --chmod=600 server-image.tar.gz ${{ secrets.USERNAME }}@${{ secrets.HOST_NAME }}:~/server/
-          ssh ${{ secrets.USERNAME }}@${{ secrets.HOST_NAME }} "~/entrypoint.sh ~/server/server-image.tar.gz"
+          rsync -av --chmod=600 server.tar.gz ${{ secrets.USERNAME }}@${{ secrets.HOST_NAME }}:~/
+
+      - name: Restart server
+        run: |
+          ssh ${{ secrets.USERNAME }}@${{ secrets.HOST_NAME }} "~/entrypoint.sh"
 
   verify:
     needs: deploy
