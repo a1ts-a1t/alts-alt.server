@@ -17,8 +17,6 @@ uuid = { version = "1.18.1", features = ["v4"] }
 tokio-stream = "0.1.17"
 pin-project-lite = "0.2"
 hyper-util = "0.1.20"
-moka = { version = "0.12", features = ["future"] }
-bytes = "1"
 hyper-tls = "0.6"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
