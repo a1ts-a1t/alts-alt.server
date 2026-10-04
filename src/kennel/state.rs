@@ -1,19 +1,18 @@
-use std::{collections::HashMap, path::Path, sync::Arc, time::Duration};
+use std::{path::Path, sync::Arc, time::Duration};
 
 use kennel_club::{ImageFormat, Kennel, Sprite, State as SpriteState};
 use rand::{SeedableRng, rngs::StdRng, seq::IteratorRandom};
 use tokio::sync::Mutex;
-use tokio::{
-    sync::mpsc::{self, Receiver, Sender},
-    time::sleep,
-};
-use uuid::Uuid;
+use tokio::{sync::broadcast, time::sleep};
 
 use crate::kennel::json::{CreatureJson, KennelJson};
 
 static IMAGE_WIDTH: u32 = 2048;
 static IMAGE_HEIGHT: u32 = 2048;
 static FRAME_DURATION: Duration = Duration::from_millis(1000 / 12); // 12 fps
+
+/// ticks a slow client may fall behind before broadcast reports lag and frames are skipped
+static UPDATE_BUFFER: usize = 4;
 
 type ImageResult = Option<Result<Vec<u8>, String>>;
 
@@ -26,7 +25,7 @@ pub struct KennelState {
     kennel: Result<Arc<Mutex<Kennel>>, String>,
     is_shutdown: Arc<Mutex<bool>>,
     image_cache: Arc<Mutex<ImageResult>>,
-    subscribers: Arc<Mutex<HashMap<Uuid, Sender<KennelJson>>>>,
+    updates: broadcast::Sender<KennelJson>,
 }
 
 impl KennelState {
@@ -38,12 +37,14 @@ impl KennelState {
             kennel,
             is_shutdown: Arc::new(Mutex::new(false)),
             image_cache: Arc::new(Mutex::new(None)),
-            subscribers: Arc::new(Mutex::new(HashMap::new())),
+            updates: broadcast::channel(UPDATE_BUFFER).0,
         };
+
         state.spawn_updates();
 
         state
     }
+
     pub fn availability(&self) -> Result<(), String> {
         self.loaded().map(|_| ())
     }
@@ -58,7 +59,7 @@ impl KennelState {
         };
         let thread_is_shutdown = self.is_shutdown.clone();
         let thread_image_cache = self.image_cache.clone();
-        let thread_subscribers = self.subscribers.clone();
+        let thread_updates = self.updates.clone();
 
         tokio::spawn(async move {
             let mut kennel_rng = safe_rng();
@@ -78,13 +79,10 @@ impl KennelState {
                     .next(&mut kennel_rng)
                     .expect("Error generating next kennel state");
 
-                let subscribers = thread_subscribers.lock().await;
-
-                let kennel_json = KennelJson::from(&next_kennel);
-                for subscriber in subscribers.values() {
-                    let _ = subscriber.try_send(kennel_json.clone());
+                if thread_updates.receiver_count() > 0 {
+                    let kennel_json = KennelJson::from(&next_kennel);
+                    let _ = thread_updates.send(kennel_json);
                 }
-                drop(subscribers);
 
                 *kennel = next_kennel;
                 drop(kennel);
@@ -158,18 +156,8 @@ impl KennelState {
             .and_then(|s| kennel.get_sprite_by(id, s, frame).cloned()))
     }
 
-    pub async fn subscribe(&self) -> (Uuid, Receiver<KennelJson>) {
-        let mut subscribers = self.subscribers.lock().await;
-        let (tx, rx) = mpsc::channel(1);
-        let id = Uuid::new_v4();
-
-        subscribers.insert(id, tx);
-        (id, rx)
-    }
-
-    pub async fn unsubscribe(&self, id: &Uuid) {
-        let mut subscribers = self.subscribers.lock().await;
-        subscribers.remove(id);
+    pub fn subscribe(&self) -> broadcast::Receiver<KennelJson> {
+        self.updates.subscribe()
     }
 
     pub async fn shutdown(&self) {

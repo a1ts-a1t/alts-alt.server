@@ -1,14 +1,15 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{convert::Infallible, path::PathBuf, sync::Arc};
 
 use axum::Json;
 use axum::extract::ws::{Message, WebSocketUpgrade};
 use axum::extract::{Path, State};
 use axum::http::{StatusCode, header};
+use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{Router, get};
-use futures_util::{SinkExt, StreamExt};
+use futures_util::{SinkExt, StreamExt, stream::Stream};
 use kennel_club::ImageFormat;
-use tokio_stream::wrappers::ReceiverStream;
+use tokio_stream::wrappers::BroadcastStream;
 
 use crate::kennel::stream::greedy_zip;
 
@@ -156,13 +157,12 @@ async fn ws_kennel(
     Ok(ws
         .on_upgrade(move |socket| async move {
             let (mut sender, receiver) = socket.split();
-            let (uuid, broadcast) = kennel.subscribe().await;
-            let mut stream = greedy_zip(receiver, ReceiverStream::new(broadcast));
+            let mut stream = greedy_zip(receiver, BroadcastStream::new(kennel.subscribe()));
 
             while let Some((message, kennel_json)) = stream.next().await {
                 match (message, kennel_json) {
                     (Some(Ok(Message::Close(_))), _) | (Some(Err(_)), _) => break,
-                    (_, Some(json)) => {
+                    (_, Some(Ok(json))) => {
                         if let Ok(json_str) = serde_json::to_string(&json)
                             && sender.send(Message::text(json_str)).await.is_err()
                         {
@@ -172,10 +172,22 @@ async fn ws_kennel(
                     (_, _) => {}
                 }
             }
-
-            kennel.unsubscribe(&uuid).await;
         })
         .into_response())
+}
+
+async fn sse_kennel(
+    State(kennel): State<Arc<KennelState>>,
+) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, Error> {
+    kennel.availability()?;
+
+    let stream = BroadcastStream::new(kennel.subscribe()).filter_map(|update| async move {
+        let json = update.ok()?;
+        let data = serde_json::to_string(&json).ok()?;
+        Some(Ok::<_, Infallible>(Event::default().data(data)))
+    });
+
+    Ok(Sse::new(stream).keep_alive(KeepAlive::default()))
 }
 
 pub fn routes() -> Router<Arc<KennelState>> {
@@ -191,5 +203,6 @@ pub fn routes() -> Router<Arc<KennelState>> {
             get(creature_img_by),
         )
         .route("/api/kennel-club/{creature_id}/site", get(creature_site))
+        .route("/api/kennel-club/events", get(sse_kennel))
         .route("/ws/kennel-club", get(ws_kennel))
 }
