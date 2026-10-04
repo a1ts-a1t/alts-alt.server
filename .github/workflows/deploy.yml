@@ -76,6 +76,11 @@ jobs:
         run: |
           install -m 600 -D /dev/null ~/.ssh/id_rsa
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          for i in 1 2 3 4 5; do
+            ssh-keyscan -H ${{ secrets.HOST_NAME }} > ~/.ssh/known_hosts && break
+            echo "keyscan attempt $i failed, retrying in 10s"; sleep 10
+          done
+          test -s ~/.ssh/known_hosts
       - name: Ship image and restart
         run: |
           rsync -av --chmod=600 server-image.tar.gz ${{ secrets.USERNAME }}@${{ secrets.HOST_NAME }}:~/server/
