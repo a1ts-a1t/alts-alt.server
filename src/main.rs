@@ -6,8 +6,6 @@ mod website;
 use std::future::IntoFuture;
 use std::time::Duration;
 
-use axum::extract::ws::{Message, WebSocketUpgrade};
-use axum::response::{IntoResponse, Response};
 use axum::routing::{Router, get};
 use tower_http::cors::CorsLayer;
 use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
@@ -18,22 +16,6 @@ use crate::website::website_router;
 
 async fn ping() -> &'static str {
     "pong"
-}
-
-async fn ws_ping(ws: WebSocketUpgrade) -> Response {
-    ws.on_upgrade(|mut socket| async move {
-        while let Some(message) = socket.recv().await {
-            if message.is_err() || matches!(message, Ok(Message::Close(_))) {
-                break;
-            }
-            if matches!(message, Ok(Message::Text(_)))
-                && socket.send(Message::text("pong")).await.is_err()
-            {
-                break;
-            }
-        }
-    })
-    .into_response()
 }
 
 async fn shutdown_signal() {
@@ -68,7 +50,6 @@ async fn main() -> Result<(), String> {
     let kennel = init_kennel();
 
     let app = Router::new()
-        .route("/ws/ping", get(ws_ping))
         .route("/api/ping", get(ping))
         .merge(twitch::routes().with_state(twitch::TwitchState::new()))
         .merge(kennel::routes().with_state(kennel.clone()))
@@ -92,7 +73,7 @@ async fn main() -> Result<(), String> {
         .into_future();
 
     // force ungraceful shutdown on 10 second timeout of a shutdown signal
-    // or else WS connections will keep it open
+    // or else SSE connections will keep it open
     tokio::select! {
         res = &mut serve => match res {
             Ok(()) => {}
@@ -105,6 +86,5 @@ async fn main() -> Result<(), String> {
         },
     }
 
-    kennel.shutdown().await;
     Ok(())
 }

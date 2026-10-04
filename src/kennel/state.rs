@@ -23,7 +23,6 @@ fn safe_rng() -> StdRng {
 
 pub struct KennelState {
     kennel: Result<Arc<Mutex<Kennel>>, String>,
-    is_shutdown: Arc<Mutex<bool>>,
     image_cache: Arc<Mutex<ImageResult>>,
     updates: broadcast::Sender<KennelJson>,
 }
@@ -35,7 +34,6 @@ impl KennelState {
 
         let state = KennelState {
             kennel,
-            is_shutdown: Arc::new(Mutex::new(false)),
             image_cache: Arc::new(Mutex::new(None)),
             updates: broadcast::channel(UPDATE_BUFFER).0,
         };
@@ -57,20 +55,12 @@ impl KennelState {
         let Some(thread_kennel) = self.kennel.as_ref().ok().cloned() else {
             return;
         };
-        let thread_is_shutdown = self.is_shutdown.clone();
         let thread_image_cache = self.image_cache.clone();
         let thread_updates = self.updates.clone();
 
         tokio::spawn(async move {
             let mut kennel_rng = safe_rng();
             loop {
-                // graceful shutdown
-                let is_shutdown = thread_is_shutdown.lock().await;
-                if *is_shutdown {
-                    break;
-                }
-                drop(is_shutdown);
-
                 sleep(FRAME_DURATION).await;
 
                 // update kennel state
@@ -158,10 +148,5 @@ impl KennelState {
 
     pub fn subscribe(&self) -> broadcast::Receiver<KennelJson> {
         self.updates.subscribe()
-    }
-
-    pub async fn shutdown(&self) {
-        let mut is_shutdown = self.is_shutdown.lock().await;
-        *is_shutdown = true;
     }
 }
