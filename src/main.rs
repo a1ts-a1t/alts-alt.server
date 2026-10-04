@@ -1,4 +1,3 @@
-mod cache;
 mod kennel;
 mod reverse_proxy;
 mod twitch;

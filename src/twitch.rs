@@ -1,34 +1,34 @@
-use std::sync::Arc;
+use std::time::Duration;
 
 use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::routing::{Router, get};
 use futures_util::TryFutureExt;
+use moka::future::Cache;
 use reqwest::{Client, Response};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::cache::Cache;
-
 const CACHE_KEY: &str = "IS_LIVE_TWITCH_API_CACHE_KEY";
+const CACHE_TTL: Duration = Duration::from_secs(60);
 
 #[derive(Clone)]
 pub struct TwitchState {
     client: Client,
-    cache: Arc<Cache<String, String>>,
+    cache: Cache<&'static str, TwitchApiResponse>,
 }
 
 impl TwitchState {
     pub fn new() -> Self {
         Self {
             client: Client::new(),
-            cache: Arc::new(Cache::default()),
+            cache: Cache::builder().time_to_live(CACHE_TTL).build(),
         }
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct TwitchApiResponse {
     is_live: bool,
 }
@@ -63,26 +63,13 @@ async fn fetch_twitch_api_response(client: &Client) -> Result<TwitchApiResponse,
 async fn twitch(
     State(state): State<TwitchState>,
 ) -> Result<Json<TwitchApiResponse>, (StatusCode, String)> {
-    let cache_value = state
+    let is_live = state
         .cache
-        .get(CACHE_KEY)
-        .ok_or(())
-        .and_then(|val| serde_json::from_str::<TwitchApiResponse>(&val).map_err(|_| ()));
+        .try_get_with(CACHE_KEY, fetch_twitch_api_response(&state.client))
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.as_ref().clone()))?;
 
-    match cache_value {
-        Ok(val) => Ok(Json(val)),
-        Err(_) => {
-            let res = fetch_twitch_api_response(&state.client).await;
-            res.inspect(|val| {
-                state.cache.put(
-                    CACHE_KEY.to_string(),
-                    serde_json::to_string(val).expect("Unable to deserialize Twitch API response."),
-                )
-            })
-            .map(Json)
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
-        }
-    }
+    Ok(Json(is_live))
 }
 
 pub fn routes() -> Router<TwitchState> {
