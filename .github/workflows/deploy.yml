@@ -76,13 +76,10 @@ jobs:
         run: |
           install -m 600 -D /dev/null ~/.ssh/id_rsa
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.HOST_NAME }} > ~/.ssh/known_hosts
-
       - name: Ship image and restart
         run: |
           rsync -av --chmod=600 server-image.tar.gz ${{ secrets.USERNAME }}@${{ secrets.HOST_NAME }}:~/server/
-          ssh ${{ secrets.USERNAME }}@${{ secrets.HOST_NAME }} \
-            "docker load -i ~/server/server-image.tar.gz > /dev/null && rm ~/server/server-image.tar.gz && ~/entrypoint.sh"
+          ssh ${{ secrets.USERNAME }}@${{ secrets.HOST_NAME }} "~/entrypoint.sh ~/server/server-image.tar.gz"
 
   verify:
     needs: deploy
